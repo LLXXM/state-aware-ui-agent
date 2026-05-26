@@ -365,10 +365,6 @@ class ActionExecutor:
                 return False
             return self.wait(seconds)
 
-        elif action_type in ['answer', 'terminate']:
-            self.logger.info(f"Action '{action_type}' is handled by the agent loop")
-            return True
-        
         else:
             self.logger.warning(f"Unknown computer action: {action_type}")
             return False

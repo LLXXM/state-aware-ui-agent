@@ -1,6 +1,6 @@
 import logging
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from see_think_act_agent import SeeThinkActAgent
 from utils.agent_function_call import ComputerUse
@@ -15,6 +15,7 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.computer_use = ComputerUse()
         self.agent.task_completed = False
         self.agent.task_status = None
+        self.agent.task_answer = None
 
     def test_text_saying_complete_does_not_end_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = None
@@ -84,6 +85,39 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertTrue(self.agent.task_completed)
         self.assertEqual(self.agent.task_status, "failure")
+
+    def test_answer_completes_task_and_stores_text(self):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "answer", "text": "42"},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertTrue(self.agent.task_completed)
+        self.assertEqual(self.agent.task_status, "answered")
+        self.assertEqual(self.agent.task_answer, "42")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_run_returns_terminal_answer(self):
+        self.agent.max_iterations = 3
+        self.agent.iteration_count = 0
+        self.agent.conversation_history = []
+        self.agent._capture_current_state = Mock(return_value=object())
+        self.agent._think_and_decide = Mock(return_value={"message": {}})
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "answer", "text": "Visible value"},
+        }
+
+        with patch("see_think_act_agent.time.sleep"):
+            result = self.agent.run("Read the value on screen")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["status"], "answered")
+        self.assertEqual(result["answer"], "Visible value")
+        self.assertEqual(result["iterations"], 1)
 
     def test_termination_without_status_is_rejected(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = {

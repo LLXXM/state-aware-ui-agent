@@ -78,6 +78,7 @@ class SeeThinkActAgent:
         self.iteration_count = 0
         self.task_completed = False
         self.task_status = None
+        self.task_answer = None
         self.conversation_history = []
         
         self.logger.info(f"Agent initialized with model: {model}")
@@ -244,6 +245,9 @@ You have access to a 'computer' tool that allows you to:
         # Check for answer action (just observation)
         if arguments.get('action') == 'answer':
             answer_text = arguments.get('text', '')
+            self.task_completed = True
+            self.task_status = 'answered'
+            self.task_answer = answer_text
             self.logger.info(f"Model's answer: {answer_text}")
             return True
         
@@ -278,6 +282,7 @@ You have access to a 'computer' tool that allows you to:
         self.iteration_count = 0
         self.task_completed = False
         self.task_status = None
+        self.task_answer = None
         self.conversation_history = []
         
         start_time = time.time()
@@ -315,12 +320,14 @@ You have access to a 'computer' tool that allows you to:
             
             if self.task_completed:
                 result = {
-                    'success': self.task_status == 'success',
+                    'success': self.task_status in {'success', 'answered'},
                     'status': self.task_status,
                     'message': f'Task completed in {self.iteration_count} iterations',
                     'iterations': self.iteration_count,
                     'elapsed_time': elapsed_time
                 }
+                if self.task_answer is not None:
+                    result['answer'] = self.task_answer
                 self.logger.info(f"\n{'=' * 80}")
                 self.logger.info(f"TASK COMPLETED: {result['message']}")
                 self.logger.info(f"Status: {self.task_status}")
