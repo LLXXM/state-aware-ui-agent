@@ -1,10 +1,8 @@
 """Bring an existing ibaPDA instance to a safe stopped and closed state."""
 
-import json
-
 from see_think_act_agent import SeeThinkActAgent
 from ui_contexts import IBAPDA_UI_CONTEXT
-from ui_tests.window_setup import (
+from ui_tests.support.window_setup import (
     close_existing_ibapda_window_and_confirm,
     find_ibapda_window_handle,
     focus_existing_ibapda_window_for_recovery,
@@ -32,18 +30,20 @@ Safety restrictions:
 """.strip()
 
 
-def main() -> None:
+def ensure_ibapda_closed(
+    screenshot_dir: str = "artifacts/ui_tests/ensure_ibapda_closed",
+    check_connection: bool = True,
+) -> dict:
+    """Stop recording if necessary and close an existing ibaPDA client window."""
     if find_ibapda_window_handle() is None:
-        result = {
+        return {
             "success": True,
             "status": "already_closed",
             "message": "No visible or minimized ibaPDA Client main window was detected.",
         }
-        print(json.dumps(result, indent=2))
-        return
 
     if not focus_existing_ibapda_window_for_recovery():
-        result = {
+        return {
             "success": False,
             "status": "window_focus_failed",
             "message": (
@@ -51,14 +51,12 @@ def main() -> None:
                 "confirmed in the foreground. No UI action was executed."
             ),
         }
-        print(json.dumps(result, indent=2))
-        return
 
     agent = SeeThinkActAgent(
         dry_run=False,
         max_iterations=10,
         save_screenshots=True,
-        screenshot_dir="artifacts/ui_tests/ensure_ibapda_closed",
+        screenshot_dir=screenshot_dir,
         max_task_duration=180,
         max_repeated_actions=2,
         max_consecutive_failures=2,
@@ -67,13 +65,16 @@ def main() -> None:
         additional_system_prompt=IBAPDA_UI_CONTEXT,
     )
 
-    if not agent.ollama_client.test_connection():
-        print("ERROR: Ollama is unavailable or the configured model is missing.")
-        return
+    if check_connection and not agent.ollama_client.test_connection():
+        return {
+            "success": False,
+            "status": "connection_failed",
+            "message": "Ollama is unavailable or the configured model is missing.",
+        }
 
     print("Starting cleanup of an existing ibaPDA instance.")
     print("The cleanup runner will not open a new ibaPDA instance.")
-    print("Screenshots are stored in artifacts/ui_tests/ensure_ibapda_closed.")
+    print(f"Screenshots are stored in {screenshot_dir}.")
     result = agent.run(TASK)
     if result.get("status") == "success":
         window_closed = close_existing_ibapda_window_and_confirm()
@@ -85,8 +86,4 @@ def main() -> None:
                 "Data Recording is stopped, but a visible or minimized ibaPDA "
                 "window remains after the close request."
             )
-    print(json.dumps(result, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+    return result

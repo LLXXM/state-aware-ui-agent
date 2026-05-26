@@ -1,1 +1,1 @@
-"""Manual and constrained UI workflow runners."""
+"""UI test case execution and shared safety support."""

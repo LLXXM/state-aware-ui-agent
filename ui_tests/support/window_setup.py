@@ -37,16 +37,6 @@ def find_ibapda_window_handle() -> Optional[int]:
     return found[0] if found else None
 
 
-def ensure_no_existing_ibapda_window_before_launch() -> bool:
-    """Prevent launching while a visible or minimized ibaPDA window exists."""
-    if find_ibapda_window_handle() is None:
-        return True
-
-    print("ERROR: An existing visible or minimized ibaPDA Client main window was detected; no new instance will be opened.")
-    print("Run: py -m ui_tests.run_ensure_ibapda_closed")
-    return False
-
-
 def focus_existing_ibapda_window_for_recovery() -> bool:
     """Focus an ibaPDA window, restoring it only when it is minimized."""
     hwnd = find_ibapda_window_handle()
