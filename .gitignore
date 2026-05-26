@@ -23,8 +23,3 @@ artifacts/ui_tests/
 # OS files
 .DS_Store
 Thumbs.db
-
-# Local example/setup files
-examples.py
-test_setup.py
-utils/multimodal_coding/
