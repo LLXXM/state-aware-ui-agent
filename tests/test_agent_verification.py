@@ -23,6 +23,9 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.agent.action_history = []
         self.agent.dry_run = False
         self.agent.allowed_actions = None
+        self.agent.max_executed_mouse_actions = None
+        self.agent.executed_mouse_actions = 0
+        self.agent.approval_required_action = None
         self.agent.verify_mouse_targets = True
         self.agent.save_screenshots = False
         self.agent.save_action_overlays = False
@@ -80,6 +83,23 @@ class AgentMouseVerificationTests(unittest.TestCase):
             "user_query"
         ]
         self.assertIn("Minimize Visual Studio Code", verification_prompt)
+
+    def test_approved_mouse_target_is_held_after_budget_is_spent(self):
+        self.agent.max_executed_mouse_actions = 1
+        self.agent.executed_mouse_actions = 1
+        self.agent.ollama_client.parse_computer_use_action.side_effect = [
+            self._proposed_click(),
+            self._verification("approve", "Crosshair is on the requested button."),
+        ]
+        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertEqual(self.agent.task_status, "approval_required")
+        self.assertEqual(self.agent.approval_required_action["action"], "left_click")
+        self.assertEqual(self.agent.action_history[-1]["outcome"], "approval_required")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_rejected_mouse_target_aborts_before_execution(self):
         self.agent.ollama_client.parse_computer_use_action.side_effect = [

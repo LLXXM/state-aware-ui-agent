@@ -40,7 +40,9 @@ class SeeThinkActAgent:
                  dry_run: bool = config.DRY_RUN,
                  save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS,
                  verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS,
-                 allowed_actions: Optional[set] = config.ALLOWED_ACTIONS):
+                 allowed_actions: Optional[set] = config.ALLOWED_ACTIONS,
+                 max_executed_mouse_actions: Optional[int] = config.MAX_EXECUTED_MOUSE_ACTIONS,
+                 additional_system_prompt: Optional[str] = None):
         """
         Initialize the See-Think-Act Agent
         
@@ -59,6 +61,8 @@ class SeeThinkActAgent:
             save_action_overlays: Whether to save planned mouse targets on screenshots
             verify_mouse_targets: Require model approval of marked mouse targets
             allowed_actions: Optional set of permitted actions; None permits the schema
+            max_executed_mouse_actions: Mouse actions permitted before pausing for approval
+            additional_system_prompt: Optional application-specific UI knowledge
         """
         # Setup logging
         logging.basicConfig(
@@ -92,6 +96,10 @@ class SeeThinkActAgent:
         self.allowed_actions = (
             None if allowed_actions is None else set(allowed_actions)
         )
+        if max_executed_mouse_actions is not None and max_executed_mouse_actions < 0:
+            raise ValueError("max_executed_mouse_actions must be zero or greater")
+        self.max_executed_mouse_actions = max_executed_mouse_actions
+        self.additional_system_prompt = additional_system_prompt
         self.screenshot_dir = Path(screenshot_dir)
         
         # Create screenshot directory
@@ -117,6 +125,8 @@ class SeeThinkActAgent:
         self.task_answer = None
         self.abort_reason = None
         self.dry_run_action = None
+        self.approval_required_action = None
+        self.executed_mouse_actions = 0
         self.last_action_overlay = None
         self.last_mouse_verification = None
         self.current_screenshot = None
@@ -128,8 +138,19 @@ class SeeThinkActAgent:
         self.logger.info(f"Screen size: {screen_width}x{screen_height}")
     
     def _get_system_prompt(self) -> str:
-        """Get the system prompt for the agent"""
+        """Get the general behavior prompt for the agent."""
         return config.SYSTEM_PROMPT
+
+    def _with_additional_system_prompt(self, base_prompt: str) -> str:
+        """Append optional application UI context to a system instruction."""
+        additional_prompt = getattr(self, 'additional_system_prompt', None)
+        if not additional_prompt:
+            return base_prompt
+        return (
+            f"{base_prompt.rstrip()}\n\n"
+            "Application-specific UI context:\n"
+            f"{additional_prompt.strip()}"
+        )
     
     def _prepare_tools(self) -> List[Dict[str, Any]]:
         """Prepare tool definitions for Ollama"""
@@ -265,7 +286,9 @@ class SeeThinkActAgent:
         response = self.ollama_client.chat_with_image(
             user_query=prompt,
             image=overlay,
-            system_prompt="Verify only the marked mouse target. Do not propose another action.",
+            system_prompt=self._with_additional_system_prompt(
+                "Verify only the marked mouse target. Do not propose another action."
+            ),
             tools=self._prepare_mouse_verification_tools(),
         )
         tool_call = self.ollama_client.parse_computer_use_action(response)
@@ -349,6 +372,13 @@ class SeeThinkActAgent:
         allowed_actions = getattr(self, 'allowed_actions', None)
         return allowed_actions is None or arguments.get('action') in allowed_actions
 
+    def _mouse_action_budget_reached(self, arguments: Dict[str, Any]) -> bool:
+        """Return whether another planned mouse action needs external approval."""
+        limit = getattr(self, 'max_executed_mouse_actions', None)
+        if limit is None or arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+            return False
+        return getattr(self, 'executed_mouse_actions', 0) >= limit
+
     @staticmethod
     def _is_executable_action(arguments: Dict[str, Any]) -> bool:
         """Return whether the action can modify or navigate the desktop."""
@@ -423,7 +453,7 @@ class SeeThinkActAgent:
             response = self.ollama_client.chat_with_image(
                 user_query=user_prompt,
                 image=screenshot,
-                system_prompt=self._get_system_prompt(),
+                system_prompt=self._with_additional_system_prompt(self._get_system_prompt()),
                 tools=tools
             )
             
@@ -540,9 +570,19 @@ class SeeThinkActAgent:
                 f"{self.last_mouse_verification['reason']}"
             )
             return False
+
+        if self._mouse_action_budget_reached(arguments):
+            self._record_action(arguments, 'approval_required', overlay_path)
+            self.task_completed = True
+            self.task_status = 'approval_required'
+            self.approval_required_action = dict(arguments)
+            self.logger.info(f"Approval required before mouse action: {arguments}")
+            return True
         
         # Execute the action
         self.logger.info(f"Executing action: {arguments}")
+        if arguments.get('action') in self.computer_use.MOUSE_ACTIONS:
+            self.executed_mouse_actions = getattr(self, 'executed_mouse_actions', 0) + 1
         success = self.action_executor.execute_computer_use_action({
             'name': action_name,
             'arguments': arguments
@@ -581,6 +621,8 @@ class SeeThinkActAgent:
         self.task_answer = None
         self.abort_reason = None
         self.dry_run_action = None
+        self.approval_required_action = None
+        self.executed_mouse_actions = 0
         self.last_action_overlay = None
         self.last_mouse_verification = None
         self.current_screenshot = None
@@ -636,6 +678,11 @@ class SeeThinkActAgent:
                         'Dry run stopped before executing proposed action: '
                         f"{self.dry_run_action.get('action')}"
                     )
+                elif self.task_status == 'approval_required':
+                    message = (
+                        'Approval required before executing proposed mouse action: '
+                        f"{self.approval_required_action.get('action')}"
+                    )
                 result = {
                     'success': self.task_status in {'success', 'answered'},
                     'status': self.task_status,
@@ -649,6 +696,8 @@ class SeeThinkActAgent:
                     result['answer'] = self.task_answer
                 if self.dry_run_action is not None:
                     result['proposed_action'] = self.dry_run_action
+                if self.approval_required_action is not None:
+                    result['proposed_action'] = self.approval_required_action
                 if self.last_action_overlay is not None:
                     result['last_action_overlay'] = self.last_action_overlay
                 if self.last_mouse_verification is not None:

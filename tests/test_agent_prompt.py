@@ -2,6 +2,7 @@ import logging
 import unittest
 from unittest.mock import Mock
 
+import config
 from see_think_act_agent import SeeThinkActAgent
 
 
@@ -13,6 +14,7 @@ class AgentPromptTests(unittest.TestCase):
         self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
         self.agent._prepare_tools = Mock(return_value=[])
         self.agent.action_history = []
+        self.agent.additional_system_prompt = None
 
     def test_first_iteration_asks_for_first_action(self):
         self.agent.iteration_count = 1
@@ -54,6 +56,19 @@ class AgentPromptTests(unittest.TestCase):
         self.assertIn("entire user task", system_prompt)
         self.assertIn("intermediate visual check", system_prompt)
         self.assertIn("checkpoint", system_prompt)
+
+    def test_additional_system_prompt_is_sent_separately_from_general_source(self):
+        self.agent.iteration_count = 1
+        self.agent.additional_system_prompt = "The green Go button starts ibaPDA."
+
+        self.agent._think_and_decide("Start the operation", screenshot=object())
+
+        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
+            "system_prompt"
+        ]
+        self.assertEqual(self.agent._get_system_prompt(), config.SYSTEM_PROMPT)
+        self.assertIn("Application-specific UI context:", prompt)
+        self.assertIn("The green Go button starts ibaPDA.", prompt)
 
     def test_checkpoint_observation_is_included_in_later_prompt(self):
         self.agent.iteration_count = 3

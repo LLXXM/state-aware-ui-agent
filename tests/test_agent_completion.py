@@ -22,6 +22,9 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.post_action_delay = 1.0
         self.agent.dry_run = False
         self.agent.dry_run_action = None
+        self.agent.approval_required_action = None
+        self.agent.executed_mouse_actions = 0
+        self.agent.max_executed_mouse_actions = None
         self.agent.allowed_actions = None
 
     def test_text_saying_complete_does_not_end_task(self):

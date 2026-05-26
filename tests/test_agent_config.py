@@ -25,6 +25,7 @@ class AgentConfigTests(unittest.TestCase):
             "post_action_delay": config.POST_ACTION_DELAY,
             "dry_run": config.DRY_RUN,
             "allowed_actions": config.ALLOWED_ACTIONS,
+            "max_executed_mouse_actions": config.MAX_EXECUTED_MOUSE_ACTIONS,
         }
 
         for name, default in expected_defaults.items():
@@ -60,6 +61,8 @@ class AgentConfigTests(unittest.TestCase):
             post_action_delay=0.2,
             dry_run=False,
             allowed_actions={"left_click", "terminate"},
+            max_executed_mouse_actions=2,
+            additional_system_prompt="Application controls",
         )
 
         ollama_client.assert_called_once_with(model="custom-model")
@@ -74,6 +77,8 @@ class AgentConfigTests(unittest.TestCase):
         self.assertFalse(agent.save_action_overlays)
         self.assertFalse(agent.verify_mouse_targets)
         self.assertEqual(agent.allowed_actions, {"left_click", "terminate"})
+        self.assertEqual(agent.max_executed_mouse_actions, 2)
+        self.assertEqual(agent.additional_system_prompt, "Application controls")
 
 
 if __name__ == "__main__":

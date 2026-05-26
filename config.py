@@ -9,6 +9,7 @@ SCREENSHOT_DIR = "agent_screenshots"
 LOG_LEVEL = "INFO"
 DRY_RUN = True
 ALLOWED_ACTIONS = None  # None allows every validated computer_use action.
+MAX_EXECUTED_MOUSE_ACTIONS = None  # None does not impose a mouse-action budget.
 
 # Delays in seconds.
 ITERATION_DELAY = 0.5

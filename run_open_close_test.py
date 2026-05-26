@@ -6,6 +6,7 @@ import time
 import pyautogui
 
 from see_think_act_agent import SeeThinkActAgent
+from ui_contexts import IBAPDA_UI_CONTEXT
 
 
 TASK = """
@@ -48,6 +49,7 @@ def main() -> None:
         max_repeated_actions=2,
         max_consecutive_failures=2,
         allowed_actions={"double_click", "left_click", "wait", "terminate"},
+        additional_system_prompt=IBAPDA_UI_CONTEXT,
     )
 
     if not agent.ollama_client.test_connection():

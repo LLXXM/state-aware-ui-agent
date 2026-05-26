@@ -6,6 +6,7 @@ from run_open_close_test import (
     minimize_all_windows_for_test,
     restore_minimized_windows_after_test,
 )
+from ui_contexts import IBAPDA_UI_CONTEXT
 
 
 class OpenCloseRunnerTests(unittest.TestCase):
@@ -42,6 +43,10 @@ class OpenCloseRunnerTests(unittest.TestCase):
         self.assertEqual(
             agent_class.call_args.kwargs["allowed_actions"],
             {"double_click", "left_click", "wait", "terminate"},
+        )
+        self.assertEqual(
+            agent_class.call_args.kwargs["additional_system_prompt"],
+            IBAPDA_UI_CONTEXT,
         )
         minimize.assert_called_once_with()
         agent.run.assert_called_once()
