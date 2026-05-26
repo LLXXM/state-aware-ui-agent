@@ -80,6 +80,7 @@ class SeeThinkActAgent:
         self.task_status = None
         self.task_answer = None
         self.conversation_history = []
+        self.action_history = []
         
         self.logger.info(f"Agent initialized with model: {model}")
         self.logger.info(f"Screen size: {screen_width}x{screen_height}")
@@ -106,14 +107,18 @@ Important guidelines:
 - If an action fails, try adjusting your approach
 - When the task is complete, use the 'terminate' action with status 'success'
 - If the task cannot be completed, use 'terminate' with status 'failure'
+- Use the 'answer' action only when giving a textual answer completes the entire user task
+- For an intermediate visual check in a multi-step workflow, use 'checkpoint' to record the observation and continue with the next required action
+- Use the execution history provided with later screenshots to avoid repeating completed actions
 
-You have access to a 'computer' tool that allows you to:
+You have access to a 'computer_use' tool that allows you to:
 - Click (left, right, double, middle)
 - Type text
 - Press keys
 - Move mouse
 - Scroll
 - Wait for changes
+- Record a checkpoint for a verified intermediate visual state
 - Terminate when done
 """
     
@@ -151,6 +156,32 @@ You have access to a 'computer' tool that allows you to:
             self._save_screenshot(screenshot)
         
         return screenshot
+
+    def _format_action_history(self) -> str:
+        """Summarize recent actions for the next model decision."""
+        if not self.action_history:
+            return ""
+
+        history_lines = []
+        for entry in self.action_history[-10:]:
+            arguments = json.dumps(entry["arguments"], ensure_ascii=True, sort_keys=True)
+            history_lines.append(
+                f"- Iteration {entry['iteration']}: {arguments} -> {entry['outcome']}"
+            )
+
+        return (
+            "\n\nExecution history from this task:\n"
+            + "\n".join(history_lines)
+            + "\nUse the current screenshot to verify effects and do not repeat successful steps unnecessarily."
+        )
+
+    def _record_action(self, arguments: Dict[str, Any], outcome: str) -> None:
+        """Store a compact outcome record for later decisions."""
+        self.action_history.append({
+            "iteration": self.iteration_count,
+            "arguments": dict(arguments),
+            "outcome": outcome,
+        })
     
     def _think_and_decide(self, task: str, screenshot) -> Dict[str, Any]:
         """
@@ -170,6 +201,8 @@ You have access to a 'computer' tool that allows you to:
             user_prompt = f"Task: {task}\n\nThis is the current state of the desktop. What should I do first to accomplish this task?"
         else:
             user_prompt = f"Task: {task}\n\nThis is the current state after the previous action. What should I do next?"
+
+        user_prompt += self._format_action_history()
         
         # Prepare tools
         tools = self._prepare_tools()
@@ -237,6 +270,7 @@ You have access to a 'computer' tool that allows you to:
         # Check for termination
         if arguments.get('action') == 'terminate':
             status = arguments.get('status')
+            self._record_action(arguments, status)
             self.task_completed = True
             self.task_status = status
             self.logger.info(f"Task terminated with status: {self.task_status}")
@@ -245,10 +279,18 @@ You have access to a 'computer' tool that allows you to:
         # Check for answer action (just observation)
         if arguments.get('action') == 'answer':
             answer_text = arguments.get('text', '')
+            self._record_action(arguments, 'answered')
             self.task_completed = True
             self.task_status = 'answered'
             self.task_answer = answer_text
             self.logger.info(f"Model's answer: {answer_text}")
+            return True
+
+        # Record an intermediate visual confirmation without ending the task
+        if arguments.get('action') == 'checkpoint':
+            checkpoint_text = arguments.get('text', '')
+            self._record_action(arguments, 'observed')
+            self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
         
         # Execute the action
@@ -257,6 +299,7 @@ You have access to a 'computer' tool that allows you to:
             'name': action_name,
             'arguments': arguments
         })
+        self._record_action(arguments, 'executed' if success else 'failed')
         
         # Wait a bit after action for UI to update
         if success and arguments.get('action') != 'wait':
@@ -284,6 +327,7 @@ You have access to a 'computer' tool that allows you to:
         self.task_status = None
         self.task_answer = None
         self.conversation_history = []
+        self.action_history = []
         
         start_time = time.time()
         

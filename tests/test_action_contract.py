@@ -39,6 +39,18 @@ class ComputerUseSchemaTests(unittest.TestCase):
         with self.assertRaises(ActionValidationError):
             ComputerUse().validate_arguments({"action": "terminate"})
 
+    def test_accepts_checkpoint_with_observation_text(self):
+        arguments = ComputerUse().validate_arguments({
+            "action": "checkpoint",
+            "text": "Recording indicator is green",
+        })
+
+        self.assertEqual(arguments["action"], "checkpoint")
+
+    def test_rejects_checkpoint_without_observation_text(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({"action": "checkpoint"})
+
 
 class ActionExecutorContractTests(unittest.TestCase):
     def setUp(self):

@@ -21,6 +21,7 @@ class ComputerUse:
         "scroll",
         "hscroll",
         "wait",
+        "checkpoint",
         "terminate",
         "answer",
     }
@@ -39,8 +40,9 @@ The action to perform. Available actions:
 * `scroll`: Perform vertical scrolling using `pixels`.
 * `hscroll`: Perform horizontal scrolling using `pixels`.
 * `wait`: Wait for `time` seconds.
+* `checkpoint`: Record a visually confirmed intermediate workflow state using `text` and continue the task.
 * `terminate`: Finish the task and report `status`.
-* `answer`: Return a textual answer using `text`.
+* `answer`: Return a final textual answer using `text` only when answering completes the full user task, not for an intermediate workflow check.
 """.strip(),
                 "enum": [
                     "key",
@@ -55,6 +57,7 @@ The action to perform. Available actions:
                     "scroll",
                     "hscroll",
                     "wait",
+                    "checkpoint",
                     "terminate",
                     "answer",
                 ],
@@ -66,7 +69,7 @@ The action to perform. Available actions:
                 "type": "array",
             },
             "text": {
-                "description": "Text for `action=type` and `action=answer`.",
+                "description": "Text for `action=type`, `action=checkpoint`, and `action=answer`.",
                 "type": "string",
             },
             "coordinate": {
@@ -135,7 +138,7 @@ Use a mouse and keyboard to interact with a computer.
                 raise ActionValidationError("Key action requires non-empty keys")
             if not all(isinstance(key, str) and key for key in keys):
                 raise ActionValidationError("Each key must be a non-empty string")
-        elif action in {"type", "answer"}:
+        elif action in {"type", "checkpoint", "answer"}:
             if not isinstance(arguments.get("text"), str):
                 raise ActionValidationError(f"{action} action requires text")
         elif action in {"scroll", "hscroll"}:

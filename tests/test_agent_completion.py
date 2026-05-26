@@ -16,6 +16,8 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.task_completed = False
         self.agent.task_status = None
         self.agent.task_answer = None
+        self.agent.iteration_count = 1
+        self.agent.action_history = []
 
     def test_text_saying_complete_does_not_end_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = None
@@ -98,7 +100,49 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertTrue(self.agent.task_completed)
         self.assertEqual(self.agent.task_status, "answered")
         self.assertEqual(self.agent.task_answer, "42")
+        self.assertEqual(self.agent.action_history[0]["outcome"], "answered")
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_checkpoint_records_observation_without_completing_task(self):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {
+                "action": "checkpoint",
+                "text": "Recording indicator is green",
+            },
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertFalse(self.agent.task_completed)
+        self.assertIsNone(self.agent.task_status)
+        self.assertEqual(self.agent.action_history, [{
+            "iteration": 1,
+            "arguments": {
+                "action": "checkpoint",
+                "text": "Recording indicator is green",
+            },
+            "outcome": "observed",
+        }])
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    @patch("see_think_act_agent.time.sleep")
+    def test_executed_action_is_added_to_history(self, _sleep):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "type", "text": "hello"},
+        }
+        self.agent.action_executor.execute_computer_use_action.return_value = True
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertEqual(self.agent.action_history, [{
+            "iteration": 1,
+            "arguments": {"action": "type", "text": "hello"},
+            "outcome": "executed",
+        }])
 
     def test_run_returns_terminal_answer(self):
         self.agent.max_iterations = 3
