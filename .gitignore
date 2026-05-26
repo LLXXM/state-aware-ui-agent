@@ -35,7 +35,6 @@ see_think_act_demo.ipynb
 # example config files
 examples.py
 test_setup.py
-config.py
 utils/multimodal_coding/
 
 # Testfälle

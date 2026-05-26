@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from datetime import datetime
 
+import config
 from utils.screenshot_capture import ScreenshotCapture
 from utils.ollama_client import OllamaVisionClient
 from utils.action_executor import ActionExecutor
@@ -24,14 +25,16 @@ class SeeThinkActAgent:
     """
     
     def __init__(self,
-                 model: str = "qwen3-vl:235b-cloud",
-                 max_iterations: int = 50,
-                 save_screenshots: bool = True,
-                 screenshot_dir: str = "screenshots",
-                 log_level: str = "INFO",
-                 max_task_duration: float = 600,
-                 max_repeated_actions: int = 3,
-                 max_consecutive_failures: int = 3):
+                 model: str = config.MODEL_NAME,
+                 max_iterations: int = config.MAX_ITERATIONS,
+                 save_screenshots: bool = config.SAVE_SCREENSHOTS,
+                 screenshot_dir: str = config.SCREENSHOT_DIR,
+                 log_level: str = config.LOG_LEVEL,
+                 max_task_duration: float = config.MAX_TASK_DURATION,
+                 max_repeated_actions: int = config.MAX_REPEATED_ACTIONS,
+                 max_consecutive_failures: int = config.MAX_CONSECUTIVE_FAILURES,
+                 iteration_delay: float = config.ITERATION_DELAY,
+                 post_action_delay: float = config.POST_ACTION_DELAY):
         """
         Initialize the See-Think-Act Agent
         
@@ -44,6 +47,8 @@ class SeeThinkActAgent:
             max_task_duration: Maximum runtime in seconds; 0 disables this limit
             max_repeated_actions: Maximum identical executable actions in a row
             max_consecutive_failures: Maximum failed executable actions in a row
+            iteration_delay: Pause between agent iterations in seconds
+            post_action_delay: Pause after successful UI-changing actions in seconds
         """
         # Setup logging
         logging.basicConfig(
@@ -68,6 +73,8 @@ class SeeThinkActAgent:
         self.max_task_duration = max_task_duration
         self.max_repeated_actions = max_repeated_actions
         self.max_consecutive_failures = max_consecutive_failures
+        self.iteration_delay = iteration_delay
+        self.post_action_delay = post_action_delay
         self.save_screenshots = save_screenshots
         self.screenshot_dir = Path(screenshot_dir)
         
@@ -97,40 +104,7 @@ class SeeThinkActAgent:
     
     def _get_system_prompt(self) -> str:
         """Get the system prompt for the agent"""
-        return """You are a helpful AI assistant that can see, think, and act on a Windows 11 computer.
-
-Your capabilities:
-1. SEE: You receive screenshots of the current desktop state
-2. THINK: You analyze what you see and plan the next action
-3. ACT: You can control the mouse, keyboard, and perform various actions
-
-When given a task:
-1. First, look at the screenshot to understand the current state
-2. Think about what needs to be done to accomplish the task
-3. Take ONE action at a time
-4. After each action, you'll get a new screenshot to see the result
-5. Continue until the task is complete
-
-Important guidelines:
-- Be precise with mouse coordinates - aim for the center of buttons/links
-- Wait after actions that might take time (opening apps, loading pages)
-- If an action fails, try adjusting your approach
-- When the task is complete, use the 'terminate' action with status 'success'
-- If the task cannot be completed, use 'terminate' with status 'failure'
-- Use the 'answer' action only when giving a textual answer completes the entire user task
-- For an intermediate visual check in a multi-step workflow, use 'checkpoint' to record the observation and continue with the next required action
-- Use the execution history provided with later screenshots to avoid repeating completed actions
-
-You have access to a 'computer_use' tool that allows you to:
-- Click (left, right, double, middle)
-- Type text
-- Press keys
-- Move mouse
-- Scroll
-- Wait for changes
-- Record a checkpoint for a verified intermediate visual state
-- Terminate when done
-"""
+        return config.SYSTEM_PROMPT
     
     def _prepare_tools(self) -> List[Dict[str, Any]]:
         """Prepare tool definitions for Ollama"""
@@ -378,7 +352,7 @@ You have access to a 'computer_use' tool that allows you to:
         
         # Wait a bit after action for UI to update
         if success and arguments.get('action') != 'wait':
-            time.sleep(1)
+            time.sleep(self.post_action_delay)
         
         return success
     
@@ -436,7 +410,7 @@ You have access to a 'computer_use' tool that allows you to:
                     self.logger.warning("Action execution failed, but continuing...")
                 
                 # Small delay between iterations
-                time.sleep(0.5)
+                time.sleep(self.iteration_delay)
 
                 if not self.task_completed:
                     self._runtime_limit_reached(start_time)
@@ -502,15 +476,11 @@ You have access to a 'computer_use' tool that allows you to:
 def main():
     """Example usage of the agent"""
     # Initialize agent
-    agent = SeeThinkActAgent(
-        model="qwen3-vl:235b-cloud",
-        max_iterations=30,
-        save_screenshots=True
-    )
+    agent = SeeThinkActAgent()
     
     # Test connection
     if not agent.ollama_client.test_connection():
-        print("\n⚠️  WARNING: Could not connect to Ollama or model not found")
+        print("\nWARNING: Could not connect to Ollama or model not found")
         print("Make sure Ollama is running and the model is pulled:")
         print("  ollama run qwen3-vl:235b-cloud")
         return

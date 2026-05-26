@@ -22,6 +22,8 @@ class AgentSafetyTests(unittest.TestCase):
         self.agent.max_repeated_actions = 3
         self.agent.max_consecutive_failures = 3
         self.agent.max_task_duration = 600
+        self.agent.iteration_delay = 0.5
+        self.agent.post_action_delay = 1.0
 
     def _model_action(self, arguments):
         self.agent.ollama_client.parse_computer_use_action.return_value = {

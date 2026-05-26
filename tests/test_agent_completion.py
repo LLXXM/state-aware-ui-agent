@@ -18,6 +18,8 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.task_answer = None
         self.agent.iteration_count = 1
         self.agent.action_history = []
+        self.agent.iteration_delay = 0.5
+        self.agent.post_action_delay = 1.0
 
     def test_text_saying_complete_does_not_end_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = None
@@ -128,7 +130,8 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     @patch("see_think_act_agent.time.sleep")
-    def test_executed_action_is_added_to_history(self, _sleep):
+    def test_executed_action_is_added_to_history(self, sleep):
+        self.agent.post_action_delay = 0.2
         self.agent.ollama_client.parse_computer_use_action.return_value = {
             "name": "computer_use",
             "arguments": {"action": "type", "text": "hello"},
@@ -143,9 +146,11 @@ class AgentCompletionTests(unittest.TestCase):
             "arguments": {"action": "type", "text": "hello"},
             "outcome": "executed",
         }])
+        sleep.assert_called_once_with(0.2)
 
     def test_run_returns_terminal_answer(self):
         self.agent.max_iterations = 3
+        self.agent.iteration_delay = 0.1
         self.agent.iteration_count = 0
         self.agent.conversation_history = []
         self.agent._capture_current_state = Mock(return_value=object())
@@ -155,13 +160,14 @@ class AgentCompletionTests(unittest.TestCase):
             "arguments": {"action": "answer", "text": "Visible value"},
         }
 
-        with patch("see_think_act_agent.time.sleep"):
+        with patch("see_think_act_agent.time.sleep") as sleep:
             result = self.agent.run("Read the value on screen")
 
         self.assertTrue(result["success"])
         self.assertEqual(result["status"], "answered")
         self.assertEqual(result["answer"], "Visible value")
         self.assertEqual(result["iterations"], 1)
+        sleep.assert_called_once_with(0.1)
 
     def test_termination_without_status_is_rejected(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = {
