@@ -39,6 +39,10 @@ class OpenCloseRunnerTests(unittest.TestCase):
 
         main()
 
+        self.assertEqual(
+            agent_class.call_args.kwargs["allowed_actions"],
+            {"double_click", "left_click", "wait", "terminate"},
+        )
         minimize.assert_called_once_with()
         agent.run.assert_called_once()
         restore.assert_called_once_with()

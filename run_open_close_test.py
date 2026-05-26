@@ -10,7 +10,7 @@ from see_think_act_agent import SeeThinkActAgent
 
 TASK = """
 Perform only this limited UI test:
-1. The Visual Studio Code window has already been minimized and the desktop should be visible.
+1. All previously open windows have already been minimized and the desktop should be visible.
 2. Open the ibaPDA Client application from the desktop or Windows search.
 3. As soon as the ibaPDA Client window is visibly open, close that window using only
    its normal window close button in the title bar.
@@ -25,11 +25,16 @@ Safety restrictions:
 """.strip()
 
 
-def minimize_active_vscode_window() -> None:
-    """Minimize the VS Code window that launched this script."""
-    print("Minimizing the active Visual Studio Code window.")
-    pyautogui.hotkey("alt", "space")
-    pyautogui.press("n")
+def minimize_all_windows_for_test() -> None:
+    """Minimize all visible windows so the test starts on the desktop."""
+    print("Minimizing all windows with Win+M.")
+    pyautogui.hotkey("win", "m")
+    time.sleep(1)
+
+
+def restore_minimized_windows_after_test() -> None:
+    """Restore the windows minimized before the test, including VS Code."""
+    pyautogui.hotkey("win", "shift", "m")
     time.sleep(1)
 
 
@@ -42,6 +47,7 @@ def main() -> None:
         max_task_duration=180,
         max_repeated_actions=2,
         max_consecutive_failures=2,
+        allowed_actions={"double_click", "left_click", "wait", "terminate"},
     )
 
     if not agent.ollama_client.test_connection():
@@ -51,8 +57,12 @@ def main() -> None:
     print("Starting constrained open/close test.")
     print("Move the mouse to the top-left corner to trigger pyautogui failsafe.")
     print("Screenshots are stored in agent_screenshots/open_close_test.")
-    minimize_active_vscode_window()
-    result = agent.run(TASK)
+    minimize_all_windows_for_test()
+    try:
+        result = agent.run(TASK)
+    finally:
+        restore_minimized_windows_after_test()
+
     print(json.dumps(result, indent=2))
 
 

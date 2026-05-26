@@ -22,6 +22,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.agent.iteration_count = 1
         self.agent.action_history = []
         self.agent.dry_run = False
+        self.agent.allowed_actions = None
         self.agent.verify_mouse_targets = True
         self.agent.save_screenshots = False
         self.agent.save_action_overlays = False
@@ -41,6 +42,25 @@ class AgentMouseVerificationTests(unittest.TestCase):
             "name": "verify_mouse_target",
             "arguments": {"decision": decision, "reason": reason},
         }
+
+    @patch("see_think_act_agent.time.sleep")
+    def test_drag_target_is_verified_before_execution(self, sleep):
+        self.agent.ollama_client.parse_computer_use_action.side_effect = [
+            {
+                "name": "computer_use",
+                "arguments": {"action": "left_click_drag", "coordinate": [600, 600]},
+            },
+            self._verification("approve", "Crosshair is on the drag target."),
+        ]
+        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertEqual(self.agent.last_mouse_verification["decision"], "approve")
+        self.agent.ollama_client.chat_with_image.assert_called_once()
+        self.agent.action_executor.execute_computer_use_action.assert_called_once()
+        sleep.assert_called_once_with(0.1)
 
     @patch("see_think_act_agent.time.sleep")
     def test_approved_mouse_target_is_executed(self, sleep):

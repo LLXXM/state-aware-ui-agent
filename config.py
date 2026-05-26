@@ -8,6 +8,7 @@ VERIFY_MOUSE_TARGETS = True
 SCREENSHOT_DIR = "agent_screenshots"
 LOG_LEVEL = "INFO"
 DRY_RUN = True
+ALLOWED_ACTIONS = None  # None allows every validated computer_use action.
 
 # Delays in seconds.
 ITERATION_DELAY = 0.5

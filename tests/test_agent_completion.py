@@ -22,6 +22,7 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.post_action_delay = 1.0
         self.agent.dry_run = False
         self.agent.dry_run_action = None
+        self.agent.allowed_actions = None
 
     def test_text_saying_complete_does_not_end_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = None
@@ -151,6 +152,21 @@ class AgentCompletionTests(unittest.TestCase):
             "outcome": "executed",
         }])
         sleep.assert_called_once_with(0.2)
+
+    def test_disallowed_action_aborts_before_execution(self):
+        self.agent.allowed_actions = {"left_click", "terminate"}
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "type", "text": "not allowed"},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertEqual(self.agent.task_status, "aborted")
+        self.assertIn("not permitted", self.agent.abort_reason)
+        self.assertEqual(self.agent.action_history[0]["outcome"], "blocked_policy")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_dry_run_records_action_without_executing_it(self):
         self.agent.dry_run = True

@@ -39,7 +39,8 @@ class SeeThinkActAgent:
                  post_action_delay: float = config.POST_ACTION_DELAY,
                  dry_run: bool = config.DRY_RUN,
                  save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS,
-                 verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS):
+                 verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS,
+                 allowed_actions: Optional[set] = config.ALLOWED_ACTIONS):
         """
         Initialize the See-Think-Act Agent
         
@@ -57,6 +58,7 @@ class SeeThinkActAgent:
             dry_run: Stop before executing the first proposed desktop action
             save_action_overlays: Whether to save planned mouse targets on screenshots
             verify_mouse_targets: Require model approval of marked mouse targets
+            allowed_actions: Optional set of permitted actions; None permits the schema
         """
         # Setup logging
         logging.basicConfig(
@@ -87,6 +89,9 @@ class SeeThinkActAgent:
         self.save_screenshots = save_screenshots
         self.save_action_overlays = save_action_overlays
         self.verify_mouse_targets = verify_mouse_targets
+        self.allowed_actions = (
+            None if allowed_actions is None else set(allowed_actions)
+        )
         self.screenshot_dir = Path(screenshot_dir)
         
         # Create screenshot directory
@@ -100,6 +105,10 @@ class SeeThinkActAgent:
                 "display_height_px": 1000
             }
         )
+        if self.allowed_actions is not None:
+            unknown_actions = self.allowed_actions - self.computer_use.ACTIONS
+            if unknown_actions:
+                raise ValueError(f"Unsupported allowed actions: {sorted(unknown_actions)}")
         
         # State tracking
         self.iteration_count = 0
@@ -335,6 +344,11 @@ class SeeThinkActAgent:
         self.abort_reason = reason
         self.logger.warning(f"Task aborted: {reason}")
 
+    def _is_action_allowed(self, arguments: Dict[str, Any]) -> bool:
+        """Return whether the active task policy permits an action."""
+        allowed_actions = getattr(self, 'allowed_actions', None)
+        return allowed_actions is None or arguments.get('action') in allowed_actions
+
     @staticmethod
     def _is_executable_action(arguments: Dict[str, Any]) -> bool:
         """Return whether the action can modify or navigate the desktop."""
@@ -462,6 +476,13 @@ class SeeThinkActAgent:
             arguments = self.computer_use.validate_arguments(arguments)
         except ActionValidationError as error:
             self.logger.warning(f"Rejected invalid model action: {error}")
+            return False
+
+        if not self._is_action_allowed(arguments):
+            self._record_action(arguments, 'blocked_policy')
+            self._abort_task(
+                f"action not permitted by active policy: {arguments.get('action')}"
+            )
             return False
         
         # Check for termination
