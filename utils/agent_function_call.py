@@ -34,7 +34,7 @@ The action to perform. Available actions:
 * `key`: Press one key or a keyboard shortcut using `keys`.
 * `type`: Type a string using `text`.
 * `mouse_move`: Move the cursor to `coordinate`.
-* `left_click`, `right_click`, `middle_click`: Click at `coordinate`.
+* `left_click` or `click`, `right_click`, `middle_click`: Click at `coordinate`.
 * `double_click`, `triple_click`: Click multiple times at `coordinate`.
 * `left_click_drag`: Drag the cursor to `coordinate`.
 * `scroll`: Perform vertical scrolling using `pixels`.
@@ -49,6 +49,7 @@ The action to perform. Available actions:
                     "type",
                     "mouse_move",
                     "left_click",
+                    "click",
                     "left_click_drag",
                     "right_click",
                     "middle_click",
@@ -127,6 +128,10 @@ Use a mouse and keyboard to interact with a computer.
             raise ActionValidationError("Action arguments must be an object")
 
         action = arguments.get("action")
+        if action == "click":
+            arguments = dict(arguments)
+            arguments["action"] = "left_click"
+            action = "left_click"
         if action not in self.ACTIONS:
             raise ActionValidationError(f"Unsupported action: {action!r}")
 

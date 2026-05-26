@@ -15,6 +15,7 @@ logs/
 reports/
 screenshots/
 agent_screenshots/
+artifacts/ui_tests/
 
 # VS Code
 .vscode/

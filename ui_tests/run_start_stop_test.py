@@ -2,7 +2,8 @@
 
 import json
 
-from run_open_close_test import (
+from ui_tests.window_setup import (
+    ensure_no_existing_ibapda_window_before_launch,
     minimize_all_windows_for_test,
     restore_minimized_windows_after_test,
 )
@@ -45,11 +46,14 @@ Safety restrictions:
 
 
 def main() -> None:
+    if not ensure_no_existing_ibapda_window_before_launch():
+        return
+
     agent = SeeThinkActAgent(
         dry_run=False,
         max_iterations=12,
         save_screenshots=True,
-        screenshot_dir="agent_screenshots/start_stop_test",
+        screenshot_dir="artifacts/ui_tests/start_stop_test",
         max_task_duration=240,
         max_repeated_actions=2,
         max_consecutive_failures=2,
@@ -65,7 +69,7 @@ def main() -> None:
     print("Starting controlled autonomous ibaPDA start/stop test.")
     print("The Go and Stop actions will be executed if visually verified.")
     print("Move the mouse to the top-left corner to trigger pyautogui failsafe.")
-    print("Screenshots are stored in agent_screenshots/start_stop_test.")
+    print("Screenshots are stored in artifacts/ui_tests/start_stop_test.")
     minimize_all_windows_for_test()
     try:
         result = agent.run(TASK)

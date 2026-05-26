@@ -28,6 +28,13 @@ class ComputerUseSchemaTests(unittest.TestCase):
         with self.assertRaises(ActionValidationError):
             ComputerUse().validate_arguments({"action": "left_click"})
 
+    def test_normalizes_click_alias_to_left_click(self):
+        arguments = ComputerUse().validate_arguments(
+            {"action": "click", "coordinate": [100, 200]}
+        )
+
+        self.assertEqual(arguments["action"], "left_click")
+
     def test_rejects_coordinate_outside_normalized_range(self):
         with self.assertRaises(ActionValidationError):
             ComputerUse().validate_arguments({

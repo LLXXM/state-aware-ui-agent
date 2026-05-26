@@ -1,12 +1,14 @@
 """Run the constrained VS Code -> ibaPDA open/close UI test."""
 
 import json
-import time
-
-import pyautogui
 
 from see_think_act_agent import SeeThinkActAgent
 from ui_contexts import IBAPDA_UI_CONTEXT
+from ui_tests.window_setup import (
+    ensure_no_existing_ibapda_window_before_launch,
+    minimize_all_windows_for_test,
+    restore_minimized_windows_after_test,
+)
 
 
 TASK = """
@@ -25,26 +27,15 @@ Safety restrictions:
   contents, terminate with status failure instead of attempting another action.
 """.strip()
 
-
-def minimize_all_windows_for_test() -> None:
-    """Minimize all visible windows so the test starts on the desktop."""
-    print("Minimizing all windows with Win+M.")
-    pyautogui.hotkey("win", "m")
-    time.sleep(1)
-
-
-def restore_minimized_windows_after_test() -> None:
-    """Restore the windows minimized before the test, including VS Code."""
-    pyautogui.hotkey("win", "shift", "m")
-    time.sleep(1)
-
-
 def main() -> None:
+    if not ensure_no_existing_ibapda_window_before_launch():
+        return
+
     agent = SeeThinkActAgent(
         dry_run=False,
         max_iterations=10,
         save_screenshots=True,
-        screenshot_dir="agent_screenshots/open_close_test",
+        screenshot_dir="artifacts/ui_tests/open_close_test",
         max_task_duration=180,
         max_repeated_actions=2,
         max_consecutive_failures=2,
@@ -58,7 +49,7 @@ def main() -> None:
 
     print("Starting constrained open/close test.")
     print("Move the mouse to the top-left corner to trigger pyautogui failsafe.")
-    print("Screenshots are stored in agent_screenshots/open_close_test.")
+    print("Screenshots are stored in artifacts/ui_tests/open_close_test.")
     minimize_all_windows_for_test()
     try:
         result = agent.run(TASK)
