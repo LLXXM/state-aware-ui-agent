@@ -1,0 +1,91 @@
+import unittest
+from unittest.mock import patch
+
+from utils.action_executor import ActionExecutor
+from utils.agent_function_call import ComputerUse
+
+
+class ComputerUseSchemaTests(unittest.TestCase):
+    def test_exposes_normalized_desktop_action_schema(self):
+        function = ComputerUse().function
+        parameters = function["parameters"]["properties"]
+
+        self.assertEqual(function["name"], "computer_use")
+        self.assertIn("normalized", parameters["coordinate"]["description"])
+        self.assertIn("keys", parameters)
+        self.assertIn("pixels", parameters)
+        self.assertIn("time", parameters)
+
+
+class ActionExecutorContractTests(unittest.TestCase):
+    def setUp(self):
+        size_patcher = patch("utils.action_executor.pyautogui.size", return_value=(1920, 1080))
+        self.addCleanup(size_patcher.stop)
+        size_patcher.start()
+        self.executor = ActionExecutor(screen_width=1920, screen_height=1080)
+
+    @patch("utils.action_executor.pyautogui.click")
+    def test_click_uses_normalized_coordinates(self, click):
+        result = self.executor._execute_computer_action({
+            "action": "left_click",
+            "coordinate": [500, 500],
+        })
+
+        self.assertTrue(result)
+        click.assert_called_once_with(x=960, y=540, button="left", clicks=1)
+
+    @patch("utils.action_executor.pyautogui.click")
+    def test_triple_click_is_supported(self, click):
+        result = self.executor._execute_computer_action({
+            "action": "triple_click",
+            "coordinate": [250, 750],
+        })
+
+        self.assertTrue(result)
+        click.assert_called_once_with(x=480, y=810, button="left", clicks=3)
+
+    @patch("utils.action_executor.pyautogui.hotkey")
+    def test_key_sequence_is_executed_as_hotkey(self, hotkey):
+        result = self.executor._execute_computer_action({
+            "action": "key",
+            "keys": ["CTRL", "L"],
+        })
+
+        self.assertTrue(result)
+        hotkey.assert_called_once_with("ctrl", "l")
+
+    @patch("utils.action_executor.pyautogui.scroll")
+    @patch("utils.action_executor.pyautogui.hscroll")
+    def test_scroll_actions_use_pixels_argument(self, hscroll, scroll):
+        self.assertTrue(self.executor._execute_computer_action({
+            "action": "scroll",
+            "pixels": -4,
+        }))
+        self.assertTrue(self.executor._execute_computer_action({
+            "action": "hscroll",
+            "pixels": 3,
+        }))
+
+        scroll.assert_called_once_with(-4)
+        hscroll.assert_called_once_with(3)
+
+    @patch("utils.action_executor.time.sleep")
+    def test_wait_uses_time_argument(self, sleep):
+        result = self.executor._execute_computer_action({
+            "action": "wait",
+            "time": 2,
+        })
+
+        self.assertTrue(result)
+        sleep.assert_called_once_with(2)
+
+    @patch("utils.action_executor.pyautogui.click")
+    def test_mouse_action_without_coordinate_is_rejected(self, click):
+        result = self.executor._execute_computer_action({"action": "left_click"})
+
+        self.assertFalse(result)
+        click.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()
