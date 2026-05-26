@@ -10,7 +10,7 @@ class StartStopRunnerTests(unittest.TestCase):
     @patch("run_start_stop_test.restore_minimized_windows_after_test")
     @patch("run_start_stop_test.minimize_all_windows_for_test")
     @patch("run_start_stop_test.SeeThinkActAgent")
-    def test_executes_only_three_planned_mouse_actions_with_ui_context(
+    def test_allows_start_stop_and_two_confirmation_dialogs_with_ui_context(
         self, agent_class, minimize, restore, _print
     ):
         agent = Mock()
@@ -21,7 +21,7 @@ class StartStopRunnerTests(unittest.TestCase):
         main()
 
         kwargs = agent_class.call_args.kwargs
-        self.assertEqual(kwargs["max_executed_mouse_actions"], 3)
+        self.assertEqual(kwargs["max_executed_mouse_actions"], 5)
         self.assertEqual(kwargs["additional_system_prompt"], IBAPDA_UI_CONTEXT)
         self.assertEqual(
             kwargs["allowed_actions"],

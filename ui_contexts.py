@@ -2,16 +2,47 @@
 
 IBAPDA_UI_CONTEXT = """You are operating the ibaPDA Client application.
 
-Known UI elements:
+Starting ibaPDA Client:
 - The Windows desktop shortcut named 'ibaPDA Client' opens the application.
-- In the ibaPDA main window, the round green button with a play symbol in the
-  top-left toolbar below 'Ansicht' is the Go/start control.
-- Activating Go can start a measurement or recording. Click it only when the
-  current task explicitly requires starting and later stopping that operation.
-- After Go has been clicked, inspect the current screenshot for the running
-  state and the corresponding Stop control. Do not guess its position from
-  memory; click Stop only when it is visually identifiable as the control that
-  returns the application to the stopped state.
-- A task is not complete after Stop until the screenshot visually confirms that
-  the operation is no longer running.
+- Wait for the main window to be visibly loaded before selecting controls in
+  the application toolbar.
+
+Data Recording controls:
+- Data Recording is controlled by a filled circular GO/STOP text-button pair.
+- GO is labeled 'GO' in white letters. STOP is labeled 'STOP' in white letters.
+- GO is directly to the left of STOP.
+- The GO/STOP pair is grouped between a two-person icon on its left and gear
+  icons on its right.
+
+Data Recording states:
+- Stopped state: GO is green and STOP is gray.
+- Running state after a successful GO action: GO is gray and STOP is red.
+- In the terminal pane at the bottom labeled 'Datenaufzeichnungsstatus', the
+  stopped state shows only the system or computer name. No 'Data Store' entry
+  is present while Data Recording is stopped.
+- During active Data Recording, a 'Data Store' entry appears in
+  'Datenaufzeichnungsstatus' with a small green circular indicator before it.
+- The presence of 'Data Store' with a green indicator is strong evidence that
+  Data Recording is active, especially if toolbar colors are hard to distinguish.
+- Do not treat a click as successful by itself. Confirm the expected state
+  from the button colors and/or 'Datenaufzeichnungsstatus'.
+- Once a GO click has produced an 'Erfassung wird gestartet' dialog/window or
+  a 'Data Store' entry with a green indicator, consider the GO start action
+  accepted. Do not click GO a second time in the same start/stop workflow.
+  Continue by checking the running state and then selecting STOP.
+
+View controls, not Data Recording:
+- 'Ansichten starten' is a separate outlined green circle containing a green
+  triangle/play symbol. It has an outlined gray circular pause button beside it.
+- 'Ansichten starten' and its pause control do not operate Data Recording.
+- For a Data Recording task, select only the filled, text-labeled GO/STOP pair.
+  Never select a triangle/play-symbol button as Data Recording GO.
+
+Confirmation dialogs:
+- After clicking GO or STOP, a confirmation dialog or window may appear.
+- A window titled 'Erfassung wird gestartet' means that the GO action has
+  already initiated the start procedure; it is not evidence that GO failed.
+- Interact with a dialog only when its purpose is clearly to confirm the Data
+  Recording start or stop action required by the current task.
+- If a dialog is ambiguous or requests any other change, terminate with failure.
 """

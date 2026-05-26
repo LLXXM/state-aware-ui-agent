@@ -15,8 +15,12 @@ Perform only this controlled inspection task:
 1. All previously open windows have already been minimized and the desktop should be visible.
 2. Open the ibaPDA Client application by double-clicking its visible desktop icon.
 3. Wait until the ibaPDA Client main window is fully visible.
-4. Identify the round green 'Go' button in the top-left area below the word 'Ansicht'.
-   Propose exactly one left click on that Go button as the next action.
+4. Identify the filled green Data Recording button labeled 'GO' in white text.
+   It lies directly to the left of the filled gray button labeled 'STOP',
+   between a two-person icon and gear icons. Do not select the separate
+   'Ansichten starten' button, which is a green outlined circle with a
+   triangle/play symbol and has no 'GO' text.
+5. Propose exactly one left click on the Data Recording Go button as the next action.
 
 Safety restrictions:
 - The runner will stop before the proposed Go-button click can be executed.

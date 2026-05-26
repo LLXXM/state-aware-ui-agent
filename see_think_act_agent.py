@@ -201,12 +201,16 @@ class SeeThinkActAgent:
         overlay = screenshot.copy()
         x = int((coordinate[0] / 1000.0) * overlay.width)
         y = int((coordinate[1] / 1000.0) * overlay.height)
-        radius = max(10, int(min(overlay.size) * 0.012))
+        radius = max(6, int(min(overlay.size) * 0.006))
+        gap = max(3, radius // 2)
+        arm = radius + 5
         draw = ImageDraw.Draw(overlay)
         color = (255, 0, 0)
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), outline=color, width=3)
-        draw.line((x - radius * 2, y, x + radius * 2, y), fill=color, width=3)
-        draw.line((x, y - radius * 2, x, y + radius * 2), fill=color, width=3)
+        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=color)
+        draw.line((x - arm, y, x - gap, y), fill=color, width=2)
+        draw.line((x + gap, y, x + arm, y), fill=color, width=2)
+        draw.line((x, y - arm, x, y - gap), fill=color, width=2)
+        draw.line((x, y + gap, x, y + arm), fill=color, width=2)
 
         label = (
             f"{arguments['action']} normalized={coordinate} pixels=({x}, {y})"
@@ -263,7 +267,21 @@ class SeeThinkActAgent:
             },
         }]
 
-    def _verify_mouse_target(self, arguments: Dict[str, Any]) -> bool:
+    @staticmethod
+    def _extract_action_intent(response: Dict[str, Any]) -> str:
+        """Extract the planning model's explanation for a proposed action."""
+        if isinstance(response, dict):
+            message = response.get("message", {})
+        else:
+            message = getattr(response, "message", {})
+
+        if isinstance(message, dict):
+            return message.get("thinking") or message.get("content") or ""
+        return getattr(message, "thinking", None) or getattr(message, "content", None) or ""
+
+    def _verify_mouse_target(
+        self, arguments: Dict[str, Any], action_intent: str = ""
+    ) -> bool:
         """Ask the model to verify a marked target before a real mouse action."""
         overlay = self._render_action_overlay(arguments)
         if overlay is None:
@@ -277,10 +295,13 @@ class SeeThinkActAgent:
             "You are verifying a proposed desktop mouse action before it is executed. "
             f"The user's task is: {getattr(self, 'current_task', '')!r}. "
             f"The requested action is {arguments['action']!r}. "
+            f"The planning model's intended target is described as: {action_intent or 'not supplied'!r}. "
             "The red crosshair in the image is the exact click or pointer target. "
             f"Prior action history is: {self._format_action_history() or 'none'}. "
-            "Use verify_mouse_target with decision='approve' only if the center of "
-            "the red crosshair is clearly on the intended UI element for this action. "
+            "Verify the marked target against the planning model's intended target; "
+            "do not choose a different next action. Use verify_mouse_target with "
+            "decision='approve' only if the center of the red crosshair is clearly "
+            "on that intended UI element. "
             "If it is misplaced, ambiguous, or unsafe, use decision='reject'."
         )
         response = self.ollama_client.chat_with_image(
@@ -475,6 +496,7 @@ class SeeThinkActAgent:
             True if action executed successfully
         """
         # Parse the action from response
+        action_intent = self._extract_action_intent(response)
         action = self.ollama_client.parse_computer_use_action(response)
         
         if not action:
@@ -562,7 +584,7 @@ class SeeThinkActAgent:
         if (
             arguments.get('action') in self.computer_use.MOUSE_ACTIONS
             and getattr(self, 'verify_mouse_targets', False)
-            and not self._verify_mouse_target(arguments)
+            and not self._verify_mouse_target(arguments, action_intent)
         ):
             self._record_action(arguments, 'blocked_verification', overlay_path)
             self._abort_task(

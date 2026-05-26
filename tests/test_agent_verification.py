@@ -117,6 +117,28 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.assertEqual(self.agent.action_history[-1]["outcome"], "blocked_verification")
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
+    @patch("see_think_act_agent.time.sleep")
+    def test_verification_receives_planned_stop_target_intent(self, sleep):
+        self.agent.ollama_client.parse_computer_use_action.side_effect = [
+            self._proposed_click(),
+            self._verification("approve", "Crosshair is on STOP."),
+        ]
+        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
+        response = {
+            "message": {
+                "thinking": "Data Store is active, so click the red STOP button."
+            }
+        }
+
+        result = self.agent._execute_action(response)
+
+        self.assertTrue(result)
+        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
+            "user_query"
+        ]
+        self.assertIn("click the red STOP button", prompt)
+        self.assertIn("do not choose a different next action", prompt)
+
     def test_dry_run_does_not_request_target_approval(self):
         self.agent.dry_run = True
         self.agent.ollama_client.parse_computer_use_action.return_value = self._proposed_click()
