@@ -177,25 +177,35 @@ class OllamaVisionClient:
         Returns:
             True if connection successful, False otherwise
         """
-
-
         try:
             # Try to list models
             models = self.client.list()
-            
+
             # Check if our model is available
-            model_names = [m['name'] for m in models.get('models', [])]
-            
+            available_models = getattr(models, 'models', None)
+            if available_models is None and isinstance(models, dict):
+                available_models = models.get('models', [])
+
+            model_names = []
+            for model in available_models or []:
+                if isinstance(model, dict):
+                    model_name = model.get('model') or model.get('name')
+                else:
+                    model_name = getattr(model, 'model', None) or getattr(model, 'name', None)
+
+                if model_name:
+                    model_names.append(model_name)
+
             if self.model in model_names or any(self.model in name for name in model_names):
-                print(f"✓ Model '{self.model}' is available")
+                print(f"OK: Model '{self.model}' is available")
                 return True
             else:
-                print(f"✗ Model '{self.model}' not found")
+                print(f"ERROR: Model '{self.model}' not found")
                 print(f"Available models: {model_names}")
                 return False
-                
+
         except Exception as e:
-            print(f"✗ Error connecting to Ollama: {e}")
+            print(f"ERROR: Could not connect to Ollama: {e}")
             return False
 
 
@@ -205,8 +215,8 @@ if __name__ == "__main__":
     
     print("Testing Ollama connection...")
     if client.test_connection():
-        print("\n✓ Ollama client initialized successfully")
+        print("\nOK: Ollama client initialized successfully")
     else:
-        print("\n✗ Failed to initialize Ollama client")
+        print("\nERROR: Failed to initialize Ollama client")
         print("Make sure Ollama is running and the model is pulled:")
         print("  ollama run qwen3-vl:235b-cloud")

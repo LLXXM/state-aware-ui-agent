@@ -7,9 +7,6 @@ pyautogui>=0.9.54            # GUI automation (mouse & keyboard)
 Pillow>=10.0.0               # Image processing
 ollama>=0.1.0                # Ollama Python client
 
-# Qwen Agent dependencies
-qwen-agent>=0.0.5            # Qwen agent framework for function calling
-
 # Additional utilities
 python-dotenv>=1.0.0         # Environment variable management
 

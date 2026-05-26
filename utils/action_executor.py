@@ -4,8 +4,7 @@ Performs mouse, keyboard, and other computer actions
 """
 import pyautogui
 import time
-import subprocess
-from typing import Tuple, Optional, List
+from typing import Optional, Tuple
 import logging
 
 # Configure pyautogui
@@ -92,6 +91,21 @@ class ActionExecutor:
         y = int((y_norm / 1000.0) * self.screen_height)
         
         return self.click(x, y, button, clicks)
+
+    def _normalized_to_pixels(self, coordinate) -> Optional[Tuple[int, int]]:
+        """Convert a validated normalized coordinate to screen pixels."""
+        if not isinstance(coordinate, (list, tuple)) or len(coordinate) != 2:
+            self.logger.warning("Mouse action requires a two-value coordinate")
+            return None
+
+        if not all(isinstance(value, (int, float)) and 0 <= value <= 1000 for value in coordinate):
+            self.logger.warning(f"Invalid normalized coordinate: {coordinate}")
+            return None
+
+        return (
+            int((coordinate[0] / 1000.0) * self.screen_width),
+            int((coordinate[1] / 1000.0) * self.screen_height),
+        )
     
     def move_mouse(self, x: int, y: int, duration: float = 0.5) -> bool:
         """
@@ -185,6 +199,16 @@ class ActionExecutor:
         except Exception as e:
             self.logger.error(f"Error scrolling: {e}")
             return False
+
+    def hscroll(self, clicks: int) -> bool:
+        """Scroll horizontally."""
+        try:
+            self.logger.info(f"Horizontal scrolling {clicks} clicks")
+            pyautogui.hscroll(clicks)
+            return True
+        except Exception as e:
+            self.logger.error(f"Error horizontal scrolling: {e}")
+            return False
     
     def drag(self, x: int, y: int, duration: float = 0.5) -> bool:
         """
@@ -263,31 +287,47 @@ class ActionExecutor:
         action_type = args.get('action')
         
         if action_type == 'left_click':
-            coordinate = args.get('coordinate', [500, 500])
+            coordinate = args.get('coordinate')
+            if self._normalized_to_pixels(coordinate) is None:
+                return False
             return self.click_normalized(coordinate[0], coordinate[1], button='left', clicks=1)
         
         elif action_type == 'left_click_drag':
-            coordinate = args.get('coordinate', [500, 500])
-            x = int((coordinate[0] / 1000.0) * self.screen_width)
-            y = int((coordinate[1] / 1000.0) * self.screen_height)
+            pixels = self._normalized_to_pixels(args.get('coordinate'))
+            if pixels is None:
+                return False
+            x, y = pixels
             return self.drag(x, y)
         
         elif action_type == 'right_click':
-            coordinate = args.get('coordinate', [500, 500])
+            coordinate = args.get('coordinate')
+            if self._normalized_to_pixels(coordinate) is None:
+                return False
             return self.click_normalized(coordinate[0], coordinate[1], button='right', clicks=1)
         
         elif action_type == 'double_click':
-            coordinate = args.get('coordinate', [500, 500])
+            coordinate = args.get('coordinate')
+            if self._normalized_to_pixels(coordinate) is None:
+                return False
             return self.click_normalized(coordinate[0], coordinate[1], button='left', clicks=2)
+
+        elif action_type == 'triple_click':
+            coordinate = args.get('coordinate')
+            if self._normalized_to_pixels(coordinate) is None:
+                return False
+            return self.click_normalized(coordinate[0], coordinate[1], button='left', clicks=3)
         
         elif action_type == 'middle_click':
-            coordinate = args.get('coordinate', [500, 500])
+            coordinate = args.get('coordinate')
+            if self._normalized_to_pixels(coordinate) is None:
+                return False
             return self.click_normalized(coordinate[0], coordinate[1], button='middle', clicks=1)
         
         elif action_type == 'mouse_move':
-            coordinate = args.get('coordinate', [500, 500])
-            x = int((coordinate[0] / 1000.0) * self.screen_width)
-            y = int((coordinate[1] / 1000.0) * self.screen_height)
+            pixels = self._normalized_to_pixels(args.get('coordinate'))
+            if pixels is None:
+                return False
+            x, y = pixels
             return self.move_mouse(x, y)
         
         elif action_type == 'type':
@@ -295,24 +335,36 @@ class ActionExecutor:
             return self.type_text(text)
         
         elif action_type == 'key':
-            key = args.get('text', 'enter')
-            return self.press_key(key)
+            keys = args.get('keys')
+            if not isinstance(keys, list) or not keys:
+                self.logger.warning("Key action requires a non-empty keys list")
+                return False
+            keys = [str(key).lower() for key in keys]
+            if len(keys) == 1:
+                return self.press_key(keys[0])
+            return self.hotkey(*keys)
         
         elif action_type == 'scroll':
-            scroll_amount = args.get('scroll_amount', 0)
-            return self.scroll(scroll_amount)
-        
-        elif action_type == 'screenshot':
-            # Screenshot is handled externally
-            self.logger.info("Screenshot action requested (handled externally)")
-            return True
-        
-        elif action_type == 'cursor_position':
-            # Get current cursor position
-            x, y = pyautogui.position()
-            self.logger.info(f"Current cursor position: ({x}, {y})")
-            return True
-        
+            pixels = args.get('pixels')
+            if not isinstance(pixels, (int, float)):
+                self.logger.warning("Scroll action requires a numeric pixels value")
+                return False
+            return self.scroll(int(pixels))
+
+        elif action_type == 'hscroll':
+            pixels = args.get('pixels')
+            if not isinstance(pixels, (int, float)):
+                self.logger.warning("Horizontal scroll action requires a numeric pixels value")
+                return False
+            return self.hscroll(int(pixels))
+
+        elif action_type == 'wait':
+            seconds = args.get('time')
+            if not isinstance(seconds, (int, float)) or not 0 <= seconds <= 30:
+                self.logger.warning("Wait action requires time between 0 and 30 seconds")
+                return False
+            return self.wait(seconds)
+
         else:
             self.logger.warning(f"Unknown computer action: {action_type}")
             return False

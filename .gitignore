@@ -10,11 +10,12 @@ venv/
 # Environment variables
 .env
 
-# Logs and reports
+# Logs and generated artifacts
 logs/
 reports/
 screenshots/
 agent_screenshots/
+artifacts/ui_tests/
 
 # VS Code
 .vscode/
@@ -23,20 +24,7 @@ agent_screenshots/
 .DS_Store
 Thumbs.db
 
-# MD Files
-BUILD_SUMMARY.md
-QUICKSTART.md
-README.md
-
-# Jupyter Notebooks
-computer_use.ipynb
-see_think_act_demo.ipynb
-
-# example config files
+# Local example/setup files
 examples.py
 test_setup.py
-config.py
 utils/multimodal_coding/
-
-# Testfälle
-Testfälle/
