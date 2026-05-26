@@ -165,7 +165,7 @@ You have access to a 'computer' tool that allows you to:
         self.logger.info("Thinking and deciding next action...")
         
         # Build the prompt
-        if self.iteration_count == 0:
+        if self.iteration_count == 1:
             user_prompt = f"Task: {task}\n\nThis is the current state of the desktop. What should I do first to accomplish this task?"
         else:
             user_prompt = f"Task: {task}\n\nThis is the current state after the previous action. What should I do next?"
