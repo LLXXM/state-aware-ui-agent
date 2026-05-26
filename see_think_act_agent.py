@@ -9,6 +9,8 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from datetime import datetime
 
+from PIL import ImageDraw
+
 import config
 from utils.screenshot_capture import ScreenshotCapture
 from utils.ollama_client import OllamaVisionClient
@@ -35,7 +37,8 @@ class SeeThinkActAgent:
                  max_consecutive_failures: int = config.MAX_CONSECUTIVE_FAILURES,
                  iteration_delay: float = config.ITERATION_DELAY,
                  post_action_delay: float = config.POST_ACTION_DELAY,
-                 dry_run: bool = config.DRY_RUN):
+                 dry_run: bool = config.DRY_RUN,
+                 save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS):
         """
         Initialize the See-Think-Act Agent
         
@@ -51,6 +54,7 @@ class SeeThinkActAgent:
             iteration_delay: Pause between agent iterations in seconds
             post_action_delay: Pause after successful UI-changing actions in seconds
             dry_run: Stop before executing the first proposed desktop action
+            save_action_overlays: Whether to save planned mouse targets on screenshots
         """
         # Setup logging
         logging.basicConfig(
@@ -79,6 +83,7 @@ class SeeThinkActAgent:
         self.post_action_delay = post_action_delay
         self.dry_run = dry_run
         self.save_screenshots = save_screenshots
+        self.save_action_overlays = save_action_overlays
         self.screenshot_dir = Path(screenshot_dir)
         
         # Create screenshot directory
@@ -100,6 +105,8 @@ class SeeThinkActAgent:
         self.task_answer = None
         self.abort_reason = None
         self.dry_run_action = None
+        self.last_action_overlay = None
+        self.current_screenshot = None
         self.conversation_history = []
         self.action_history = []
         
@@ -139,11 +146,53 @@ class SeeThinkActAgent:
         """Capture current screenshot"""
         self.logger.info("Capturing screenshot...")
         screenshot = self.screenshot_capture.capture_screen()
+        self.current_screenshot = screenshot
         
         if self.save_screenshots:
             self._save_screenshot(screenshot)
         
         return screenshot
+
+    def _save_action_overlay(self, arguments: Dict[str, Any]) -> Optional[str]:
+        """Save the planned mouse position on the screenshot used for the decision."""
+        if not getattr(self, 'save_screenshots', False):
+            return None
+        if not getattr(self, 'save_action_overlays', False):
+            return None
+        if arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+            return None
+
+        screenshot = getattr(self, 'current_screenshot', None)
+        coordinate = arguments.get('coordinate')
+        if screenshot is None or not coordinate:
+            return None
+
+        overlay = screenshot.copy()
+        x = int((coordinate[0] / 1000.0) * overlay.width)
+        y = int((coordinate[1] / 1000.0) * overlay.height)
+        radius = max(10, int(min(overlay.size) * 0.012))
+        draw = ImageDraw.Draw(overlay)
+        color = (255, 0, 0)
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), outline=color, width=3)
+        draw.line((x - radius * 2, y, x + radius * 2, y), fill=color, width=3)
+        draw.line((x, y - radius * 2, x, y + radius * 2), fill=color, width=3)
+
+        label = (
+            f"{arguments['action']} normalized={coordinate} pixels=({x}, {y})"
+        )
+        text_box = draw.textbbox((0, 0), label)
+        label_x = max(0, min(x + radius + 8, overlay.width - text_box[2] - 8))
+        label_y = max(0, min(y + radius + 8, overlay.height - text_box[3] - 8))
+        draw.rectangle(
+            (label_x - 4, label_y - 4, label_x + text_box[2] + 4, label_y + text_box[3] + 4),
+            fill=(255, 255, 255),
+        )
+        draw.text((label_x, label_y), label, fill=color)
+
+        overlay_path = self._save_screenshot(overlay, prefix="planned_action")
+        self.last_action_overlay = overlay_path
+        self.logger.info(f"Planned mouse target overlay saved: {overlay_path}")
+        return overlay_path
 
     def _format_action_history(self) -> str:
         """Summarize recent actions for the next model decision."""
@@ -163,13 +212,18 @@ class SeeThinkActAgent:
             + "\nUse the current screenshot to verify effects and do not repeat successful steps unnecessarily."
         )
 
-    def _record_action(self, arguments: Dict[str, Any], outcome: str) -> None:
+    def _record_action(
+        self, arguments: Dict[str, Any], outcome: str, overlay_path: Optional[str] = None
+    ) -> None:
         """Store a compact outcome record for later decisions."""
-        self.action_history.append({
+        entry = {
             "iteration": self.iteration_count,
             "arguments": dict(arguments),
             "outcome": outcome,
-        })
+        }
+        if overlay_path is not None:
+            entry["overlay_path"] = overlay_path
+        self.action_history.append(entry)
 
     def _abort_task(self, reason: str) -> None:
         """Stop the task for a safety or progress reason."""
@@ -333,8 +387,10 @@ class SeeThinkActAgent:
             self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
 
+        overlay_path = self._save_action_overlay(arguments)
+
         if self.dry_run and self._is_executable_action(arguments):
-            self._record_action(arguments, 'dry_run')
+            self._record_action(arguments, 'dry_run', overlay_path)
             self.task_completed = True
             self.task_status = 'dry_run'
             self.dry_run_action = dict(arguments)
@@ -342,7 +398,7 @@ class SeeThinkActAgent:
             return True
 
         if self._would_repeat_action_excessively(arguments):
-            self._record_action(arguments, 'blocked_repetition')
+            self._record_action(arguments, 'blocked_repetition', overlay_path)
             self._abort_task(
                 f"action repeated more than {self.max_repeated_actions} times: "
                 f"{arguments.get('action')}"
@@ -355,7 +411,7 @@ class SeeThinkActAgent:
             'name': action_name,
             'arguments': arguments
         })
-        self._record_action(arguments, 'executed' if success else 'failed')
+        self._record_action(arguments, 'executed' if success else 'failed', overlay_path)
 
         if not success and self._has_too_many_failures():
             self._abort_task(
@@ -389,6 +445,8 @@ class SeeThinkActAgent:
         self.task_answer = None
         self.abort_reason = None
         self.dry_run_action = None
+        self.last_action_overlay = None
+        self.current_screenshot = None
         self.conversation_history = []
         self.action_history = []
         
@@ -453,6 +511,8 @@ class SeeThinkActAgent:
                     result['answer'] = self.task_answer
                 if self.dry_run_action is not None:
                     result['proposed_action'] = self.dry_run_action
+                if self.last_action_overlay is not None:
+                    result['last_action_overlay'] = self.last_action_overlay
                 self.logger.info(f"\n{'=' * 80}")
                 self.logger.info(f"TASK COMPLETED: {result['message']}")
                 self.logger.info(f"Status: {self.task_status}")

@@ -3,6 +3,7 @@
 MODEL_NAME = "qwen3-vl:235b-cloud"
 MAX_ITERATIONS = 30
 SAVE_SCREENSHOTS = True
+SAVE_ACTION_OVERLAYS = True
 SCREENSHOT_DIR = "agent_screenshots"
 LOG_LEVEL = "INFO"
 DRY_RUN = True
