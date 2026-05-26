@@ -5,6 +5,7 @@ MAX_ITERATIONS = 30
 SAVE_SCREENSHOTS = True
 SCREENSHOT_DIR = "agent_screenshots"
 LOG_LEVEL = "INFO"
+DRY_RUN = True
 
 # Delays in seconds.
 ITERATION_DELAY = 0.5

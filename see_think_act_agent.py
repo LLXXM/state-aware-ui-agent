@@ -34,7 +34,8 @@ class SeeThinkActAgent:
                  max_repeated_actions: int = config.MAX_REPEATED_ACTIONS,
                  max_consecutive_failures: int = config.MAX_CONSECUTIVE_FAILURES,
                  iteration_delay: float = config.ITERATION_DELAY,
-                 post_action_delay: float = config.POST_ACTION_DELAY):
+                 post_action_delay: float = config.POST_ACTION_DELAY,
+                 dry_run: bool = config.DRY_RUN):
         """
         Initialize the See-Think-Act Agent
         
@@ -49,6 +50,7 @@ class SeeThinkActAgent:
             max_consecutive_failures: Maximum failed executable actions in a row
             iteration_delay: Pause between agent iterations in seconds
             post_action_delay: Pause after successful UI-changing actions in seconds
+            dry_run: Stop before executing the first proposed desktop action
         """
         # Setup logging
         logging.basicConfig(
@@ -75,6 +77,7 @@ class SeeThinkActAgent:
         self.max_consecutive_failures = max_consecutive_failures
         self.iteration_delay = iteration_delay
         self.post_action_delay = post_action_delay
+        self.dry_run = dry_run
         self.save_screenshots = save_screenshots
         self.screenshot_dir = Path(screenshot_dir)
         
@@ -96,6 +99,7 @@ class SeeThinkActAgent:
         self.task_status = None
         self.task_answer = None
         self.abort_reason = None
+        self.dry_run_action = None
         self.conversation_history = []
         self.action_history = []
         
@@ -329,6 +333,14 @@ class SeeThinkActAgent:
             self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
 
+        if self.dry_run and self._is_executable_action(arguments):
+            self._record_action(arguments, 'dry_run')
+            self.task_completed = True
+            self.task_status = 'dry_run'
+            self.dry_run_action = dict(arguments)
+            self.logger.info(f"Dry run: would execute action: {arguments}")
+            return True
+
         if self._would_repeat_action_excessively(arguments):
             self._record_action(arguments, 'blocked_repetition')
             self._abort_task(
@@ -376,6 +388,7 @@ class SeeThinkActAgent:
         self.task_status = None
         self.task_answer = None
         self.abort_reason = None
+        self.dry_run_action = None
         self.conversation_history = []
         self.action_history = []
         
@@ -422,6 +435,11 @@ class SeeThinkActAgent:
                 message = f'Task completed in {self.iteration_count} iterations'
                 if self.task_status == 'aborted':
                     message = f'Task aborted: {self.abort_reason}'
+                elif self.task_status == 'dry_run':
+                    message = (
+                        'Dry run stopped before executing proposed action: '
+                        f"{self.dry_run_action.get('action')}"
+                    )
                 result = {
                     'success': self.task_status in {'success', 'answered'},
                     'status': self.task_status,
@@ -433,6 +451,8 @@ class SeeThinkActAgent:
                     result['reason'] = self.abort_reason
                 if self.task_answer is not None:
                     result['answer'] = self.task_answer
+                if self.dry_run_action is not None:
+                    result['proposed_action'] = self.dry_run_action
                 self.logger.info(f"\n{'=' * 80}")
                 self.logger.info(f"TASK COMPLETED: {result['message']}")
                 self.logger.info(f"Status: {self.task_status}")

@@ -20,6 +20,8 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.action_history = []
         self.agent.iteration_delay = 0.5
         self.agent.post_action_delay = 1.0
+        self.agent.dry_run = False
+        self.agent.dry_run_action = None
 
     def test_text_saying_complete_does_not_end_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = None
@@ -91,6 +93,7 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertEqual(self.agent.task_status, "failure")
 
     def test_answer_completes_task_and_stores_text(self):
+        self.agent.dry_run = True
         self.agent.ollama_client.parse_computer_use_action.return_value = {
             "name": "computer_use",
             "arguments": {"action": "answer", "text": "42"},
@@ -106,6 +109,7 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_checkpoint_records_observation_without_completing_task(self):
+        self.agent.dry_run = True
         self.agent.ollama_client.parse_computer_use_action.return_value = {
             "name": "computer_use",
             "arguments": {
@@ -147,6 +151,49 @@ class AgentCompletionTests(unittest.TestCase):
             "outcome": "executed",
         }])
         sleep.assert_called_once_with(0.2)
+
+    def test_dry_run_records_action_without_executing_it(self):
+        self.agent.dry_run = True
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "left_click", "coordinate": [100, 200]},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertTrue(self.agent.task_completed)
+        self.assertEqual(self.agent.task_status, "dry_run")
+        self.assertEqual(
+            self.agent.dry_run_action,
+            {"action": "left_click", "coordinate": [100, 200]},
+        )
+        self.assertEqual(self.agent.action_history[0]["outcome"], "dry_run")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_run_returns_proposed_dry_run_action(self):
+        self.agent.dry_run = True
+        self.agent.max_iterations = 3
+        self.agent.iteration_delay = 0.1
+        self.agent.iteration_count = 0
+        self.agent.conversation_history = []
+        self.agent._capture_current_state = Mock(return_value=object())
+        self.agent._think_and_decide = Mock(return_value={"message": {}})
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "type", "text": "hello"},
+        }
+
+        with patch("see_think_act_agent.time.sleep"):
+            result = self.agent.run("Write text")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(result["proposed_action"], {"action": "type", "text": "hello"})
+        self.assertEqual(result["iterations"], 1)
+        self.agent._capture_current_state.assert_called_once_with()
+        self.agent._think_and_decide.assert_called_once()
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_run_returns_terminal_answer(self):
         self.agent.max_iterations = 3

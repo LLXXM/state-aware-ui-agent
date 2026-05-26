@@ -21,6 +21,7 @@ class AgentConfigTests(unittest.TestCase):
             "max_consecutive_failures": config.MAX_CONSECUTIVE_FAILURES,
             "iteration_delay": config.ITERATION_DELAY,
             "post_action_delay": config.POST_ACTION_DELAY,
+            "dry_run": config.DRY_RUN,
         }
 
         for name, default in expected_defaults.items():
@@ -52,6 +53,7 @@ class AgentConfigTests(unittest.TestCase):
             max_consecutive_failures=2,
             iteration_delay=0.1,
             post_action_delay=0.2,
+            dry_run=False,
         )
 
         ollama_client.assert_called_once_with(model="custom-model")
@@ -62,6 +64,7 @@ class AgentConfigTests(unittest.TestCase):
         self.assertEqual(agent.max_consecutive_failures, 2)
         self.assertEqual(agent.iteration_delay, 0.1)
         self.assertEqual(agent.post_action_delay, 0.2)
+        self.assertFalse(agent.dry_run)
 
 
 if __name__ == "__main__":
