@@ -221,7 +221,11 @@ You have access to a 'computer' tool that allows you to:
                 arguments = action_details.get('arguments', {})
         else:
             arguments = action.get('arguments', {})
-            action_name = action.get('name', 'computer')
+            action_name = action.get('name')
+
+        if action_name != self.computer_use.name:
+            self.logger.warning(f"Rejected unexpected tool call: {action_name!r}")
+            return False
 
         try:
             arguments = self.computer_use.validate_arguments(arguments)

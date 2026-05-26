@@ -38,6 +38,29 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertFalse(result)
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
+    def test_unexpected_tool_cannot_terminate_task(self):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "other_tool",
+            "arguments": {"action": "terminate", "status": "success"},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertFalse(self.agent.task_completed)
+        self.assertIsNone(self.agent.task_status)
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_missing_tool_name_cannot_execute_action(self):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "arguments": {"action": "terminate", "status": "success"},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertFalse(self.agent.task_completed)
+
     def test_structured_success_termination_completes_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = {
             "name": "computer_use",
