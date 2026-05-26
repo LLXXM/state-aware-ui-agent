@@ -1,0 +1,60 @@
+"""Run the constrained VS Code -> ibaPDA open/close UI test."""
+
+import json
+import time
+
+import pyautogui
+
+from see_think_act_agent import SeeThinkActAgent
+
+
+TASK = """
+Perform only this limited UI test:
+1. The Visual Studio Code window has already been minimized and the desktop should be visible.
+2. Open the ibaPDA Client application from the desktop or Windows search.
+3. As soon as the ibaPDA Client window is visibly open, close that window using only
+   its normal window close button in the title bar.
+4. Terminate with status success only after the ibaPDA Client window is visibly closed.
+
+Safety restrictions:
+- Do not click, type, or interact with any control inside the ibaPDA Client content area.
+- Do not start, stop, configure, or change any recording, process, measurement, or file.
+- Do not perform any task beyond opening ibaPDA Client and closing its window.
+- If it is not clear how to open or close the window without interacting with its
+  contents, terminate with status failure instead of attempting another action.
+""".strip()
+
+
+def minimize_active_vscode_window() -> None:
+    """Minimize the VS Code window that launched this script."""
+    print("Minimizing the active Visual Studio Code window.")
+    pyautogui.hotkey("alt", "space")
+    pyautogui.press("n")
+    time.sleep(1)
+
+
+def main() -> None:
+    agent = SeeThinkActAgent(
+        dry_run=False,
+        max_iterations=10,
+        save_screenshots=True,
+        screenshot_dir="agent_screenshots/open_close_test",
+        max_task_duration=180,
+        max_repeated_actions=2,
+        max_consecutive_failures=2,
+    )
+
+    if not agent.ollama_client.test_connection():
+        print("ERROR: Ollama is unavailable or the configured model is missing.")
+        return
+
+    print("Starting constrained open/close test.")
+    print("Move the mouse to the top-left corner to trigger pyautogui failsafe.")
+    print("Screenshots are stored in agent_screenshots/open_close_test.")
+    minimize_active_vscode_window()
+    result = agent.run(TASK)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
