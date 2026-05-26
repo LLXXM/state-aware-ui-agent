@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from utils.action_executor import ActionExecutor
-from utils.agent_function_call import ComputerUse
+from utils.agent_function_call import ActionValidationError, ComputerUse
 
 
 class ComputerUseSchemaTests(unittest.TestCase):
@@ -15,6 +15,29 @@ class ComputerUseSchemaTests(unittest.TestCase):
         self.assertIn("keys", parameters)
         self.assertIn("pixels", parameters)
         self.assertIn("time", parameters)
+
+    def test_accepts_hotkey_arguments(self):
+        arguments = ComputerUse().validate_arguments({
+            "action": "key",
+            "keys": ["ctrl", "l"],
+        })
+
+        self.assertEqual(arguments["keys"], ["ctrl", "l"])
+
+    def test_rejects_mouse_action_without_coordinate(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({"action": "left_click"})
+
+    def test_rejects_coordinate_outside_normalized_range(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({
+                "action": "left_click",
+                "coordinate": [1500, 200],
+            })
+
+    def test_rejects_termination_without_status(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({"action": "terminate"})
 
 
 class ActionExecutorContractTests(unittest.TestCase):

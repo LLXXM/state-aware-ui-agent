@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import Mock
 
 from see_think_act_agent import SeeThinkActAgent
+from utils.agent_function_call import ComputerUse
 
 
 class AgentCompletionTests(unittest.TestCase):
@@ -11,6 +12,7 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.logger = logging.getLogger(__name__)
         self.agent.ollama_client = Mock()
         self.agent.action_executor = Mock()
+        self.agent.computer_use = ComputerUse()
         self.agent.task_completed = False
         self.agent.task_status = None
 
@@ -24,6 +26,17 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertFalse(result)
         self.assertFalse(self.agent.task_completed)
         self.assertIsNone(self.agent.task_status)
+
+    def test_invalid_mouse_action_is_not_sent_to_executor(self):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "left_click"},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_structured_success_termination_completes_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = {

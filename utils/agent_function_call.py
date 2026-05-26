@@ -1,7 +1,29 @@
+class ActionValidationError(ValueError):
+    """Raised when a model action does not match the desktop action contract."""
+
+
 class ComputerUse:
     """Schema exposed to the model for desktop actions."""
 
     name = "computer_use"
+    MOUSE_ACTIONS = {
+        "mouse_move",
+        "left_click",
+        "left_click_drag",
+        "right_click",
+        "middle_click",
+        "double_click",
+        "triple_click",
+    }
+    ACTIONS = MOUSE_ACTIONS | {
+        "key",
+        "type",
+        "scroll",
+        "hscroll",
+        "wait",
+        "terminate",
+        "answer",
+    }
 
     parameters = {
         "properties": {
@@ -95,3 +117,50 @@ Use a mouse and keyboard to interact with a computer.
             "description": self.description,
             "parameters": self.parameters,
         }
+
+    def validate_arguments(self, arguments: dict) -> dict:
+        """Validate arguments produced by the model before execution."""
+        if not isinstance(arguments, dict):
+            raise ActionValidationError("Action arguments must be an object")
+
+        action = arguments.get("action")
+        if action not in self.ACTIONS:
+            raise ActionValidationError(f"Unsupported action: {action!r}")
+
+        if action in self.MOUSE_ACTIONS:
+            self._validate_coordinate(arguments.get("coordinate"))
+        elif action == "key":
+            keys = arguments.get("keys")
+            if not isinstance(keys, list) or not keys:
+                raise ActionValidationError("Key action requires non-empty keys")
+            if not all(isinstance(key, str) and key for key in keys):
+                raise ActionValidationError("Each key must be a non-empty string")
+        elif action in {"type", "answer"}:
+            if not isinstance(arguments.get("text"), str):
+                raise ActionValidationError(f"{action} action requires text")
+        elif action in {"scroll", "hscroll"}:
+            if not self._is_number(arguments.get("pixels")):
+                raise ActionValidationError(f"{action} action requires numeric pixels")
+        elif action == "wait":
+            seconds = arguments.get("time")
+            if not self._is_number(seconds) or not 0 <= seconds <= 30:
+                raise ActionValidationError("Wait time must be between 0 and 30 seconds")
+        elif action == "terminate":
+            if arguments.get("status") not in {"success", "failure"}:
+                raise ActionValidationError(
+                    "Terminate action requires success or failure status"
+                )
+
+        return arguments
+
+    @staticmethod
+    def _is_number(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    @classmethod
+    def _validate_coordinate(cls, coordinate) -> None:
+        if not isinstance(coordinate, list) or len(coordinate) != 2:
+            raise ActionValidationError("Mouse action requires coordinate [x, y]")
+
+        if not all(cls._is_number(value) and 0 <= value <= 1000 for value in coordinate):
+            raise ActionValidationError("Coordinate values must be between 0 and 1000")

@@ -12,7 +12,7 @@ from datetime import datetime
 from utils.screenshot_capture import ScreenshotCapture
 from utils.ollama_client import OllamaVisionClient
 from utils.action_executor import ActionExecutor
-from utils.agent_function_call import ComputerUse
+from utils.agent_function_call import ActionValidationError, ComputerUse
 
 
 class SeeThinkActAgent:
@@ -222,13 +222,16 @@ You have access to a 'computer' tool that allows you to:
         else:
             arguments = action.get('arguments', {})
             action_name = action.get('name', 'computer')
+
+        try:
+            arguments = self.computer_use.validate_arguments(arguments)
+        except ActionValidationError as error:
+            self.logger.warning(f"Rejected invalid model action: {error}")
+            return False
         
         # Check for termination
         if arguments.get('action') == 'terminate':
             status = arguments.get('status')
-            if status not in {'success', 'failure'}:
-                self.logger.warning("Terminate action requires an explicit success or failure status")
-                return False
             self.task_completed = True
             self.task_status = status
             self.logger.info(f"Task terminated with status: {self.task_status}")
