@@ -204,18 +204,10 @@ You have access to a 'computer' tool that allows you to:
         
         if not action:
             self.logger.warning("No action found in response")
-            # Check if the model just wants to observe
             if 'message' in response and 'content' in response['message']:
                 content = response['message']['content']
                 self.logger.info(f"Model response: {content}")
-                
-                # Check for termination signal in text
-                if 'terminate' in content.lower() or 'complete' in content.lower():
-                    self.logger.info("Task appears to be complete (textual indication)")
-                    self.task_completed = True
-                    self.task_status = 'success'
-                    return True
-            
+
             return False
         
         # Extract action details
@@ -233,8 +225,12 @@ You have access to a 'computer' tool that allows you to:
         
         # Check for termination
         if arguments.get('action') == 'terminate':
+            status = arguments.get('status')
+            if status not in {'success', 'failure'}:
+                self.logger.warning("Terminate action requires an explicit success or failure status")
+                return False
             self.task_completed = True
-            self.task_status = arguments.get('status', 'success')
+            self.task_status = status
             self.logger.info(f"Task terminated with status: {self.task_status}")
             return True
         
