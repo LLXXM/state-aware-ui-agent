@@ -28,7 +28,10 @@ class SeeThinkActAgent:
                  max_iterations: int = 50,
                  save_screenshots: bool = True,
                  screenshot_dir: str = "screenshots",
-                 log_level: str = "INFO"):
+                 log_level: str = "INFO",
+                 max_task_duration: float = 600,
+                 max_repeated_actions: int = 3,
+                 max_consecutive_failures: int = 3):
         """
         Initialize the See-Think-Act Agent
         
@@ -38,6 +41,9 @@ class SeeThinkActAgent:
             save_screenshots: Whether to save screenshots
             screenshot_dir: Directory to save screenshots
             log_level: Logging level
+            max_task_duration: Maximum runtime in seconds; 0 disables this limit
+            max_repeated_actions: Maximum identical executable actions in a row
+            max_consecutive_failures: Maximum failed executable actions in a row
         """
         # Setup logging
         logging.basicConfig(
@@ -59,6 +65,9 @@ class SeeThinkActAgent:
         
         # Configuration
         self.max_iterations = max_iterations
+        self.max_task_duration = max_task_duration
+        self.max_repeated_actions = max_repeated_actions
+        self.max_consecutive_failures = max_consecutive_failures
         self.save_screenshots = save_screenshots
         self.screenshot_dir = Path(screenshot_dir)
         
@@ -79,6 +88,7 @@ class SeeThinkActAgent:
         self.task_completed = False
         self.task_status = None
         self.task_answer = None
+        self.abort_reason = None
         self.conversation_history = []
         self.action_history = []
         
@@ -182,6 +192,58 @@ You have access to a 'computer_use' tool that allows you to:
             "arguments": dict(arguments),
             "outcome": outcome,
         })
+
+    def _abort_task(self, reason: str) -> None:
+        """Stop the task for a safety or progress reason."""
+        self.task_completed = True
+        self.task_status = 'aborted'
+        self.abort_reason = reason
+        self.logger.warning(f"Task aborted: {reason}")
+
+    @staticmethod
+    def _is_executable_action(arguments: Dict[str, Any]) -> bool:
+        """Return whether the action can modify or navigate the desktop."""
+        return arguments.get('action') not in {'wait', 'checkpoint', 'answer', 'terminate'}
+
+    def _would_repeat_action_excessively(self, arguments: Dict[str, Any]) -> bool:
+        """Detect an identical executable action proposed too many times in succession."""
+        max_repeats = getattr(self, 'max_repeated_actions', 0)
+        if max_repeats <= 0 or not self._is_executable_action(arguments):
+            return False
+
+        previous_matches = 0
+        for entry in reversed(self.action_history):
+            if not self._is_executable_action(entry['arguments']):
+                break
+            if entry['arguments'] != arguments:
+                break
+            previous_matches += 1
+
+        return previous_matches >= max_repeats
+
+    def _has_too_many_failures(self) -> bool:
+        """Detect consecutive failed executable actions."""
+        max_failures = getattr(self, 'max_consecutive_failures', 0)
+        if max_failures <= 0:
+            return False
+
+        failures = 0
+        for entry in reversed(self.action_history):
+            if not self._is_executable_action(entry['arguments']):
+                break
+            if entry['outcome'] != 'failed':
+                break
+            failures += 1
+
+        return failures >= max_failures
+
+    def _runtime_limit_reached(self, start_time: float) -> bool:
+        """Check and apply the configured runtime safety limit."""
+        max_duration = getattr(self, 'max_task_duration', 0)
+        if max_duration > 0 and time.time() - start_time >= max_duration:
+            self._abort_task(f"maximum task duration of {max_duration} seconds exceeded")
+            return True
+        return False
     
     def _think_and_decide(self, task: str, screenshot) -> Dict[str, Any]:
         """
@@ -292,6 +354,14 @@ You have access to a 'computer_use' tool that allows you to:
             self._record_action(arguments, 'observed')
             self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
+
+        if self._would_repeat_action_excessively(arguments):
+            self._record_action(arguments, 'blocked_repetition')
+            self._abort_task(
+                f"action repeated more than {self.max_repeated_actions} times: "
+                f"{arguments.get('action')}"
+            )
+            return False
         
         # Execute the action
         self.logger.info(f"Executing action: {arguments}")
@@ -300,6 +370,11 @@ You have access to a 'computer_use' tool that allows you to:
             'arguments': arguments
         })
         self._record_action(arguments, 'executed' if success else 'failed')
+
+        if not success and self._has_too_many_failures():
+            self._abort_task(
+                f"{self.max_consecutive_failures} consecutive action executions failed"
+            )
         
         # Wait a bit after action for UI to update
         if success and arguments.get('action') != 'wait':
@@ -326,6 +401,7 @@ You have access to a 'computer_use' tool that allows you to:
         self.task_completed = False
         self.task_status = None
         self.task_answer = None
+        self.abort_reason = None
         self.conversation_history = []
         self.action_history = []
         
@@ -333,6 +409,9 @@ You have access to a 'computer_use' tool that allows you to:
         
         try:
             while self.iteration_count < self.max_iterations and not self.task_completed:
+                if self._runtime_limit_reached(start_time):
+                    break
+
                 self.iteration_count += 1
                 self.logger.info(f"\n{'=' * 80}")
                 self.logger.info(f"Iteration {self.iteration_count}/{self.max_iterations}")
@@ -353,23 +432,31 @@ You have access to a 'computer_use' tool that allows you to:
                 # Step 3: ACT - Execute action
                 success = self._execute_action(response)
                 
-                if not success:
+                if not success and not self.task_completed:
                     self.logger.warning("Action execution failed, but continuing...")
                 
                 # Small delay between iterations
                 time.sleep(0.5)
+
+                if not self.task_completed:
+                    self._runtime_limit_reached(start_time)
             
             # Task completion
             elapsed_time = time.time() - start_time
             
             if self.task_completed:
+                message = f'Task completed in {self.iteration_count} iterations'
+                if self.task_status == 'aborted':
+                    message = f'Task aborted: {self.abort_reason}'
                 result = {
                     'success': self.task_status in {'success', 'answered'},
                     'status': self.task_status,
-                    'message': f'Task completed in {self.iteration_count} iterations',
+                    'message': message,
                     'iterations': self.iteration_count,
                     'elapsed_time': elapsed_time
                 }
+                if self.abort_reason is not None:
+                    result['reason'] = self.abort_reason
                 if self.task_answer is not None:
                     result['answer'] = self.task_answer
                 self.logger.info(f"\n{'=' * 80}")
