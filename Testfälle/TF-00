@@ -1,0 +1,79 @@
+import sys
+import logging
+from pathlib import Path
+
+# Add parent directory to path to import our modules
+sys.path.append(str(Path.cwd()))
+
+from see_think_act_agent import SeeThinkActAgent
+
+# Configure logging for notebook
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+print("✓ Imports successful")
+
+
+
+from utils.ollama_client import OllamaVisionClient
+
+# Test connection to Ollama
+client = OllamaVisionClient(model="qwen3-vl:235b-cloud")
+
+print("Testing Ollama connection...")
+if client.test_connection():
+    print("\n✓ Ollama is running and model is available!")
+    print("✓ Ready to start the agent")
+else:
+    print("\n✗ Could not connect to Ollama or model not found")
+    print("\nPlease ensure:")
+    print("1. Ollama is installed and running")
+    print("2. Model is pulled: ollama run qwen3-vl:235b-cloud")
+
+
+
+# Initialize the agent
+agent = SeeThinkActAgent(
+    model="qwen3-vl:235b-cloud",
+    max_iterations=30,  # Maximum number of actions before stopping
+    save_screenshots=True,  # Save screenshots for debugging
+    screenshot_dir="agent_screenshots",
+    log_level="INFO"
+)
+
+print("✓ Agent initialized successfully!")
+print(f"  Model: qwen3-vl:235b-cloud")
+print(f"  Max iterations: 30")
+print(f"  Screenshots will be saved to: agent_screenshots/")
+print(f"  Screen size: {agent.action_executor.screen_width}x{agent.action_executor.screen_height}")
+
+
+
+import json
+
+# Define a simple task
+task1 = "1. Minimize VS Code. 2. Open Notepad and type 'Hello from the AI Agent! This is a test of autonomous Notepadcomputer control.'"
+task2 = """Only take once step after another and don't repeat steps again. Remember if you successfully completed a step/ an action. Plan and run the following sequence: 
+            1. Minimize VS Code once. 
+            2. After VS Code is minimized, Open ibaPDA client from the desktop by double clicking and wait for it to open. 
+            3. Click on the round green 'Go'-Button once (not the round green play button!) in the top left corner below the word 'Ansicht' to start the data recording. The 'Go'-Button now turns grey.
+            4. Look into 'Datenaufzeichnungsstatus' on the bottom showing green dot to verify the data recording is running.
+            5. Close ibaPDA Client by clicking the big cross in the most top right corner. If ibaPDA Client succenssfully closed, move to step 7.
+            6. After Closing ibaPDA Client don't open it again!!!
+            7. Maximize VS Code again
+            """
+
+print(f"Task: {task2}")
+print("\nStarting agent...")
+print("The agent will now take control and complete the task autonomously.\n")
+
+# Run the agent
+result = agent.run(task2)
+
+# Display results
+print("\n" + "=" * 80)
+print("TASK COMPLETED!")
+print("=" * 80)
+print(json.dumps(result, indent=2))
