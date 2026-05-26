@@ -15,6 +15,7 @@ class AgentConfigTests(unittest.TestCase):
             "max_iterations": config.MAX_ITERATIONS,
             "save_screenshots": config.SAVE_SCREENSHOTS,
             "save_action_overlays": config.SAVE_ACTION_OVERLAYS,
+            "verify_mouse_targets": config.VERIFY_MOUSE_TARGETS,
             "screenshot_dir": config.SCREENSHOT_DIR,
             "log_level": config.LOG_LEVEL,
             "max_task_duration": config.MAX_TASK_DURATION,
@@ -48,6 +49,7 @@ class AgentConfigTests(unittest.TestCase):
             max_iterations=7,
             save_screenshots=False,
             save_action_overlays=False,
+            verify_mouse_targets=False,
             screenshot_dir="custom-screens",
             log_level="DEBUG",
             max_task_duration=25,
@@ -68,6 +70,7 @@ class AgentConfigTests(unittest.TestCase):
         self.assertEqual(agent.post_action_delay, 0.2)
         self.assertFalse(agent.dry_run)
         self.assertFalse(agent.save_action_overlays)
+        self.assertFalse(agent.verify_mouse_targets)
 
 
 if __name__ == "__main__":
