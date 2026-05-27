@@ -4,6 +4,7 @@ IBAPDA_UI_CONTEXT = """You are operating the ibaPDA Client application.
 
 Starting ibaPDA Client:
 - The Windows desktop shortcut named 'ibaPDA Client' opens the application.
+- YOu must double-click the desktop icon to open the application. Single-clicking is not sufficient.
 - Wait for the main window to be visibly loaded before selecting controls in
   the application toolbar.
 
@@ -45,4 +46,17 @@ Confirmation dialogs:
 - Interact with a dialog only when its purpose is clearly to confirm the Data
   Recording start or stop action required by the current task.
 - If a dialog is ambiguous or requests any other change, terminate with failure.
+
+Loading projects:
+- Use menu "Datei" -> "Projekt öffnen" to load a project
+- After selecting a project from the dropdown, confirm with "Öffnen"
+- If a dialog appears due to active recording, confirm it
+
+Layout:
+- On the left side there is the navigation tree "ibaPDA-Signalbaum"
+- Next to the right the big grey layout labeled "Untitled 1" is called "QPanel"
+- the QPanel is a layout container which can be filled with UI-Elements for data representation and visualization, called "QPanel Elements"
+- Layouts can be grouped
+- You can switch layouts by using the left layout selection dropdown in the menu  
+- The layout selection dropdown shows the currently loaded layout (Main, Layout 1, Layout 2) 
 """

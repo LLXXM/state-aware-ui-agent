@@ -15,9 +15,9 @@ class UiTestCase:
     allowed_actions: frozenset[str] = frozenset(
         {"double_click", "left_click", "wait", "checkpoint", "terminate"}
     )
-    max_iterations: int = 12
-    max_task_duration: float = 240
-    max_repeated_actions: int = 2
+    max_iterations: int = 15
+    max_task_duration: float = 600.0  # 10 minutes
+    max_repeated_actions: int = 3
     max_consecutive_failures: int = 2
     max_executed_mouse_actions: Optional[int] = None
     minimize_windows_before: bool = True

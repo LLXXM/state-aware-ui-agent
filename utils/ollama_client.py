@@ -1,6 +1,4 @@
-"""
-Ollama client for Qwen3-VL model with function calling support
-"""
+"""Ollama vision client with function calling support."""
 import ollama
 import json
 import base64
@@ -10,18 +8,27 @@ import io
 
 
 class OllamaVisionClient:
-    """Client for interacting with Qwen3-VL via Ollama"""
+    """Client for interacting with a multimodal model via Ollama."""
     
-    def __init__(self, model: str = "qwen3-vl:235b-cloud"):
+    def __init__(
+        self,
+        model: str = "qwen3.5",
+        host: Optional[str] = None,
+        num_ctx: Optional[int] = None,
+    ):
         """
         Initialize Ollama client
         
         Args:
-            model: Model name to use (default: qwen3-vl:235b-cloud)
+            model: Model name available on the configured Ollama server.
+            host: Ollama API endpoint, for example http://192.168.1.20:11434.
+            num_ctx: Optional context window size used for each chat request.
         """
 
         self.model = model
-        self.client = ollama
+        self.host = host
+        self.num_ctx = num_ctx
+        self.client = ollama.Client(host=host)
 
         
     def encode_image_to_base64(self, image: Image.Image, format: str = 'PNG') -> str:
@@ -62,6 +69,9 @@ class OllamaVisionClient:
                 'messages': messages,
                 'stream': stream
             }
+
+            if self.num_ctx is not None:
+                request_params['options'] = {'num_ctx': self.num_ctx}
             
             # Add tools if provided
             if tools:
@@ -219,4 +229,4 @@ if __name__ == "__main__":
     else:
         print("\nERROR: Failed to initialize Ollama client")
         print("Make sure Ollama is running and the model is pulled:")
-        print("  ollama run qwen3-vl:235b-cloud")
+        print("  ollama run qwen3.5")

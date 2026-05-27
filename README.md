@@ -1,7 +1,7 @@
 # Computer-Use-Agent
 
 Windows UI agent prototype for controlled ibaPDA test cases using Ollama and
-Qwen3-VL. The agent observes screenshots, proposes structured computer actions,
+Qwen 3.5. The agent observes screenshots, proposes structured computer actions,
 verifies mouse targets, and records screenshot artifacts for each run.
 
 ## Structure
@@ -21,9 +21,81 @@ Computer-Use-Agent/
   artifacts/ui_tests/          Generated run screenshots, ignored by Git
 ```
 
+## Remote Ollama Setup
+
+In the current setup, the Computer-Use-Agent runs in the VM while Ollama runs
+on the server laptop at `192.168.21.148`. By default Ollama accepts requests
+only from the same machine, so the server must first be exposed to the local
+network.
+
+### Server Laptop
+
+On the laptop that runs Ollama, open PowerShell and make the Ollama API listen
+on all local network interfaces:
+
+```powershell
+setx OLLAMA_HOST "0.0.0.0:11434"
+```
+
+Install or confirm the multimodal model intended for the UI agent:
+
+```powershell
+ollama pull qwen3.5:9b
+ollama list
+```
+
+Restart Ollama after setting `OLLAMA_HOST`. When launching the server manually
+for a test session, the equivalent temporary configuration is:
+
+```powershell
+$env:OLLAMA_HOST = "0.0.0.0:11434"
+ollama serve
+```
+
+If the VM cannot connect, allow inbound TCP traffic to Ollama through Windows
+Firewall. Run this on the server laptop in an Administrator PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "Ollama API from VM" `
+  -Direction Inbound -Protocol TCP -LocalPort 11434 `
+  -Profile Private -Action Allow
+```
+
+For a tighter rule, additionally provide the VM IP via
+`-RemoteAddress <IP-DER-VM>`.
+
+### VM / Agent Machine
+
+From the VM, first verify that the remote Ollama endpoint is reachable:
+
+```powershell
+Invoke-RestMethod http://192.168.21.148:11434/api/tags
+```
+
+The returned model list must contain the selected model, for example
+`qwen3.5:9b`. Set endpoint and model in the PowerShell session that starts the
+agent:
+
+```powershell
+$env:OLLAMA_HOST = "http://192.168.21.148:11434"
+$env:OLLAMA_MODEL = "qwen3.5:9b"
+$env:OLLAMA_NUM_CTX = "16384"
+```
+
+These variables apply to the current PowerShell session. To persist the VM
+configuration for future sessions:
+
+```powershell
+setx OLLAMA_HOST "http://192.168.21.148:11434"
+setx OLLAMA_MODEL "qwen3.5:9b"
+setx OLLAMA_NUM_CTX "16384"
+```
+
+Open a new PowerShell terminal after using `setx`.
+
 ## Run A Test Case
 
-Run TF-00:
+With the remote environment variables configured, run TF-00 from the VM:
 
 ```powershell
 py -m ui_tests.run_test_case TF-00
@@ -32,6 +104,12 @@ py -m ui_tests.run_test_case TF-00
 `TF-00` cleans up an existing ibaPDA Client window if needed, opens ibaPDA,
 starts Data Recording, verifies the running state, stops recording, verifies
 the stopped state, and closes the client safely.
+
+Without environment variables, the project connects to local Ollama at
+`http://127.0.0.1:11434`, uses `qwen3.5`, and requests a context window of
+`16384` tokens. If a remote machine does not have enough available memory,
+reduce `OLLAMA_NUM_CTX`, but values near `4096` may truncate screenshot and
+tool instructions for UI test cases.
 
 ## Add A Test Case
 

@@ -73,7 +73,11 @@ class SeeThinkActAgent:
         
         # Initialize components
         self.screenshot_capture = ScreenshotCapture()
-        self.ollama_client = OllamaVisionClient(model=model)
+        self.ollama_client = OllamaVisionClient(
+            model=model,
+            host=config.OLLAMA_HOST,
+            num_ctx=config.OLLAMA_NUM_CTX,
+        )
         
         # Get actual screen size
         screen_width, screen_height = self.screenshot_capture.get_screen_size()
@@ -773,7 +777,8 @@ def main():
     if not agent.ollama_client.test_connection():
         print("\nWARNING: Could not connect to Ollama or model not found")
         print("Make sure Ollama is running and the model is pulled:")
-        print("  ollama run qwen3-vl:235b-cloud")
+        print(f"  Ollama endpoint: {config.OLLAMA_HOST}")
+        print(f"  Required model: ollama run {config.MODEL_NAME}")
         return
     
     # Example task

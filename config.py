@@ -1,6 +1,11 @@
 """Active runtime defaults for the See-Think-Act agent."""
 
-MODEL_NAME = "qwen3-vl:235b-cloud"
+import os
+
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen3.5")
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
 MAX_ITERATIONS = 30
 SAVE_SCREENSHOTS = True
 SAVE_ACTION_OVERLAYS = True
@@ -33,6 +38,13 @@ When given a task:
 3. Take ONE action at a time
 4. After each action, you'll get a new screenshot to see the result
 5. Continue until the task is complete
+
+Response contract:
+- Every response must call the `computer_use` tool exactly once.
+- Do not answer with prose describing what should be clicked or done next.
+- If an action is needed, issue it through `computer_use`.
+- If no further action is needed, call `computer_use` with `action=terminate`.
+- The attached image is the current screen and must be inspected before acting.
 
 Important guidelines:
 - Be precise with mouse coordinates - aim for the center of buttons/links

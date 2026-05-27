@@ -37,6 +37,9 @@ class AgentConfigTests(unittest.TestCase):
         self.assertEqual(agent._get_system_prompt(), config.SYSTEM_PROMPT)
         self.assertIn("checkpoint", config.SYSTEM_PROMPT)
         self.assertIn("computer_use", config.SYSTEM_PROMPT)
+        self.assertIn("exactly once", config.SYSTEM_PROMPT)
+        self.assertTrue(config.OLLAMA_HOST.startswith("http"))
+        self.assertGreater(config.OLLAMA_NUM_CTX, 4096)
 
     @patch("see_think_act_agent.ActionExecutor")
     @patch("see_think_act_agent.OllamaVisionClient")
@@ -65,7 +68,11 @@ class AgentConfigTests(unittest.TestCase):
             additional_system_prompt="Application controls",
         )
 
-        ollama_client.assert_called_once_with(model="custom-model")
+        ollama_client.assert_called_once_with(
+            model="custom-model",
+            host=config.OLLAMA_HOST,
+            num_ctx=config.OLLAMA_NUM_CTX,
+        )
         action_executor.assert_called_once_with(screen_width=1280, screen_height=720)
         self.assertEqual(agent.max_iterations, 7)
         self.assertEqual(agent.max_task_duration, 25)
