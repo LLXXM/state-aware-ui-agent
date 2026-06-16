@@ -11,6 +11,7 @@ SAVE_SCREENSHOTS = True
 SAVE_ACTION_OVERLAYS = True
 VERIFY_MOUSE_TARGETS = True
 SCREENSHOT_DIR = "agent_screenshots"
+REPORT_DIR = "Reports"
 LOG_LEVEL = "INFO"
 DRY_RUN = True
 ALLOWED_ACTIONS = None  # None allows every validated computer_use action.

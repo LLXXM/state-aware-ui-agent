@@ -16,6 +16,7 @@ from utils.screenshot_capture import ScreenshotCapture
 from utils.ollama_client import OllamaVisionClient
 from utils.action_executor import ActionExecutor
 from utils.agent_function_call import ActionValidationError, ComputerUse
+from utils.html_report import HtmlRunReport
 
 
 class SeeThinkActAgent:
@@ -43,6 +44,7 @@ class SeeThinkActAgent:
                  allowed_actions: Optional[set] = config.ALLOWED_ACTIONS,
                  max_executed_mouse_actions: Optional[int] = config.MAX_EXECUTED_MOUSE_ACTIONS,
                  model_options: Optional[Dict[str, Any]] = None,
+                 report_dir: Optional[str] = config.REPORT_DIR,
                  additional_system_prompt: Optional[str] = None):
         """
         Initialize the See-Think-Act Agent
@@ -64,6 +66,7 @@ class SeeThinkActAgent:
             allowed_actions: Optional set of permitted actions; None permits the schema
             max_executed_mouse_actions: Mouse actions permitted before pausing for approval
             model_options: Optional Ollama generation options
+            report_dir: Directory for the incremental HTML report; None disables reporting
             additional_system_prompt: Optional application-specific UI knowledge
         """
         # Setup logging
@@ -102,6 +105,12 @@ class SeeThinkActAgent:
             raise ValueError("max_executed_mouse_actions must be zero or greater")
         self.max_executed_mouse_actions = max_executed_mouse_actions
         self.additional_system_prompt = additional_system_prompt
+        self.report_dir = report_dir
+        self.report = None
+        self.last_user_prompt = None
+        self.last_system_prompt = None
+        self.last_tool_call = None
+        self.last_action_record = None
         self.screenshot_dir = Path(screenshot_dir)
         
         # Create screenshot directory
@@ -184,9 +193,10 @@ class SeeThinkActAgent:
         self.logger.info("Capturing screenshot...")
         screenshot = self.screenshot_capture.capture_screen()
         self.current_screenshot = screenshot
+        self.current_screenshot_path = None
         
         if self.save_screenshots:
-            self._save_screenshot(screenshot)
+            self.current_screenshot_path = self._save_screenshot(screenshot)
         
         return screenshot
 
@@ -382,6 +392,7 @@ class SeeThinkActAgent:
         if overlay_path is not None:
             entry["overlay_path"] = overlay_path
         self.action_history.append(entry)
+        self.last_action_record = entry
 
     def _abort_task(self, reason: str) -> None:
         """Stop the task for a safety or progress reason."""
@@ -467,6 +478,9 @@ class SeeThinkActAgent:
             user_prompt = f"Task: {task}\n\nThis is the current state after the previous action. What should I do next?"
 
         user_prompt += self._format_action_history()
+        system_prompt = self._with_additional_system_prompt(self._get_system_prompt())
+        self.last_user_prompt = user_prompt
+        self.last_system_prompt = system_prompt
         
         # Prepare tools
         tools = self._prepare_tools()
@@ -476,7 +490,7 @@ class SeeThinkActAgent:
             response = self.ollama_client.chat_with_image(
                 user_query=user_prompt,
                 image=screenshot,
-                system_prompt=self._with_additional_system_prompt(self._get_system_prompt()),
+                system_prompt=system_prompt,
                 tools=tools
             )
             
@@ -498,8 +512,11 @@ class SeeThinkActAgent:
             True if action executed successfully
         """
         # Parse the action from response
+        self.last_tool_call = None
+        self.last_action_record = None
         action_intent = self._extract_action_intent(response)
         action = self.ollama_client.parse_computer_use_action(response)
+        self.last_tool_call = action
         
         if not action:
             self.logger.warning("No action found in response")
@@ -623,6 +640,59 @@ class SeeThinkActAgent:
             time.sleep(self.post_action_delay)
         
         return success
+
+    def _start_report(self, task: str) -> None:
+        """Create a per-run HTML report when reporting is configured."""
+        report_dir = getattr(self, 'report_dir', None)
+        if report_dir is None:
+            self.report = None
+            return
+
+        self.report = HtmlRunReport(
+            report_dir=report_dir,
+            title=f"Computer Use Agent Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        )
+        self.report.start(
+            task,
+            metadata={
+                "model": getattr(self.ollama_client, "model", None),
+                "model_options": getattr(self.ollama_client, "options", None),
+                "max_iterations": self.max_iterations,
+                "screenshot_dir": str(self.screenshot_dir),
+                "allowed_actions": sorted(self.allowed_actions) if self.allowed_actions else None,
+            },
+        )
+
+    def _record_iteration_report(self, response: Dict[str, Any], action_success: bool) -> None:
+        """Append one iteration snapshot to the HTML report."""
+        report = getattr(self, 'report', None)
+        if report is None:
+            return
+
+        action_record = getattr(self, 'last_action_record', None)
+        report.add_iteration({
+            "iteration": self.iteration_count,
+            "screenshot_path": getattr(self, 'current_screenshot_path', None),
+            "overlay_path": (
+                action_record or {}
+            ).get("overlay_path") or getattr(self, 'last_action_overlay', None),
+            "user_prompt": getattr(self, 'last_user_prompt', None),
+            "system_prompt": getattr(self, 'last_system_prompt', None),
+            "response": response,
+            "tool_call": getattr(self, 'last_tool_call', None),
+            "action_record": action_record,
+            "mouse_verification": getattr(self, 'last_mouse_verification', None),
+            "action_success": action_success,
+        })
+
+    def _finish_report(self, result: Dict[str, Any]) -> None:
+        """Write final result and expose the report path in the run result."""
+        report = getattr(self, 'report', None)
+        if report is None:
+            return
+
+        result["report_path"] = str(report.report_path)
+        report.finish(result)
     
     def run(self, task: str) -> Dict[str, Any]:
         """
@@ -650,9 +720,11 @@ class SeeThinkActAgent:
         self.last_action_overlay = None
         self.last_mouse_verification = None
         self.current_screenshot = None
+        self.current_screenshot_path = None
         self.current_task = task
         self.conversation_history = []
         self.action_history = []
+        self._start_report(task)
         
         start_time = time.time()
         
@@ -680,6 +752,7 @@ class SeeThinkActAgent:
                 
                 # Step 3: ACT - Execute action
                 success = self._execute_action(response)
+                self._record_iteration_report(response, success)
                 
                 if not success and not self.task_completed:
                     self.logger.warning("Action execution failed, but continuing...")
@@ -742,28 +815,33 @@ class SeeThinkActAgent:
                 self.logger.warning(f"\n{'=' * 80}")
                 self.logger.warning(f"TASK TIMEOUT: {result['message']}")
                 self.logger.warning(f"{'=' * 80}\n")
-            
+
+            self._finish_report(result)
             return result
             
         except KeyboardInterrupt:
             self.logger.info("\nTask interrupted by user")
-            return {
+            result = {
                 'success': False,
                 'status': 'interrupted',
                 'message': 'Task interrupted by user',
                 'iterations': self.iteration_count,
                 'elapsed_time': time.time() - start_time
             }
+            self._finish_report(result)
+            return result
         
         except Exception as e:
             self.logger.error(f"Error during task execution: {e}", exc_info=True)
-            return {
+            result = {
                 'success': False,
                 'status': 'error',
                 'message': f'Error: {str(e)}',
                 'iterations': self.iteration_count,
                 'elapsed_time': time.time() - start_time
             }
+            self._finish_report(result)
+            return result
 
 
 def main():

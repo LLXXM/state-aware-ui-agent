@@ -42,4 +42,13 @@ CASE = UiTestCase(
     task=TASK,
     additional_system_prompt=IBAPDA_UI_CONTEXT,
     max_executed_mouse_actions=5,
+
+    verify_mouse_targets=False,     # True
+    iteration_delay=0.1,            # 0.5
+    post_action_delay=0.3,          # 1.0  
+    model_options={
+        "temperature": 0.1,
+        "num_ctx": 8192,          # 32768,
+        "num_predict": 256,       #512, 
+    }
 )

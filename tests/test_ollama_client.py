@@ -71,6 +71,32 @@ class OllamaVisionClientConnectionTests(unittest.TestCase):
         client.client.chat.assert_called_once()
         self.assertEqual(client.client.chat.call_args.kwargs["options"], options)
 
+    def test_chat_normalizes_ollama_response_objects(self):
+        response = Mock()
+        response.model_dump.return_value = {
+            "message": {
+                "content": "",
+                "thinking": "I can see the ibaPDA icon.",
+                "tool_calls": [{
+                    "function": {
+                        "name": "computer_use",
+                        "arguments": {"action": "double_click"},
+                    }
+                }],
+            }
+        }
+        client = OllamaVisionClient(model="qwen3.5:397b-cloud")
+        client.client = Mock()
+        client.client.chat.return_value = response
+
+        result = client.chat(messages=[{"role": "user", "content": "hello"}])
+
+        self.assertEqual(result["message"]["thinking"], "I can see the ibaPDA icon.")
+        self.assertEqual(
+            result["message"]["tool_calls"][0]["function"]["arguments"]["action"],
+            "double_click",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

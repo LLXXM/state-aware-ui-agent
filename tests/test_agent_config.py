@@ -27,6 +27,7 @@ class AgentConfigTests(unittest.TestCase):
             "allowed_actions": config.ALLOWED_ACTIONS,
             "max_executed_mouse_actions": config.MAX_EXECUTED_MOUSE_ACTIONS,
             "model_options": None,
+            "report_dir": config.REPORT_DIR,
         }
 
         for name, default in expected_defaults.items():
@@ -64,6 +65,7 @@ class AgentConfigTests(unittest.TestCase):
             allowed_actions={"left_click", "terminate"},
             max_executed_mouse_actions=2,
             model_options={"temperature": 0},
+            report_dir="custom-reports",
             additional_system_prompt="Application controls",
         )
 

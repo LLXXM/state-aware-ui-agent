@@ -32,6 +32,16 @@ class OllamaVisionClient:
         self.options = dict(config.MODEL_OPTIONS if options is None else options)
         self.client = ollama
 
+    def _to_plain_data(self, value):
+        """Convert Ollama response objects to dict/list primitives."""
+        if hasattr(value, "model_dump"):
+            return self._to_plain_data(value.model_dump())
+        if isinstance(value, dict):
+            return {key: self._to_plain_data(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._to_plain_data(item) for item in value]
+        return value
+
     def _print_connection_help(self) -> None:
         """Print the command a user can try when Ollama/model setup fails."""
         print("\nERROR: Failed to initialize Ollama client")
@@ -86,7 +96,7 @@ class OllamaVisionClient:
             # Make the request
             response = self.client.chat(**request_params)
             
-            return response
+            return self._to_plain_data(response)
             
         except Exception as e:
             print(f"Error in Ollama chat: {e}")

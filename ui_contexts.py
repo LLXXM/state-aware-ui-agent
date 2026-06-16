@@ -15,8 +15,14 @@ Data Recording controls:
   icons on its right.
 
 Data Recording states:
+- Initial Data Recording state is not guaranteed. When the client opens, Data
+  Recording may already be stopped, already running, or unavailable because no
+  project/layout is loaded.
 - Stopped state: GO is green and STOP is gray.
-- Running state after a successful GO action: GO is gray and STOP is red.
+- Running state: GO is gray and STOP is red.
+- Unavailable/no project or layout loaded state: both GO and STOP can be gray
+  or otherwise disabled. In this state, do not infer a normal stopped/running
+  recording state from button colors alone.
 - In the terminal pane at the bottom labeled 'Datenaufzeichnungsstatus', the
   stopped state shows only the system or computer name. No 'Data Store' entry
   is present while Data Recording is stopped.
@@ -24,6 +30,12 @@ Data Recording states:
   'Datenaufzeichnungsstatus' with a small green circular indicator before it.
 - The presence of 'Data Store' with a green indicator is strong evidence that
   Data Recording is active, especially if toolbar colors are hard to distinguish.
+- If Data Recording is already running at the beginning of a start/stop test,
+  do not click GO. Treat the start condition as already satisfied and proceed
+  toward a verified STOP action.
+- If the GO/STOP pair is disabled or both buttons are gray because no
+  project/layout is loaded, terminate with failure unless the current task
+  explicitly allows loading or changing projects/layouts.
 - Do not treat a click as successful by itself. Confirm the expected state
   from the button colors and/or 'Datenaufzeichnungsstatus'.
 - Once a GO click has produced an 'Erfassung wird gestartet' dialog/window or
