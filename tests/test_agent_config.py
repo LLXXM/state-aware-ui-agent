@@ -11,7 +11,7 @@ class AgentConfigTests(unittest.TestCase):
         parameters = inspect.signature(SeeThinkActAgent.__init__).parameters
 
         expected_defaults = {
-            "model": config.MODEL_NAME,
+            "model": config.OLLAMA_MODEL,
             "max_iterations": config.MAX_ITERATIONS,
             "save_screenshots": config.SAVE_SCREENSHOTS,
             "save_action_overlays": config.SAVE_ACTION_OVERLAYS,
@@ -39,7 +39,9 @@ class AgentConfigTests(unittest.TestCase):
         self.assertIn("computer_use", config.SYSTEM_PROMPT)
         self.assertIn("exactly once", config.SYSTEM_PROMPT)
         self.assertTrue(config.OLLAMA_HOST.startswith("http"))
-        self.assertGreater(config.OLLAMA_NUM_CTX, 4096)
+        self.assertGreaterEqual(config.OLLAMA_NUM_CTX, 32768)
+        self.assertGreaterEqual(config.OLLAMA_NUM_PREDICT, 1024)
+        self.assertTrue(config.OLLAMA_THINK)
 
     @patch("see_think_act_agent.ActionExecutor")
     @patch("see_think_act_agent.OllamaVisionClient")
@@ -72,6 +74,8 @@ class AgentConfigTests(unittest.TestCase):
             model="custom-model",
             host=config.OLLAMA_HOST,
             num_ctx=config.OLLAMA_NUM_CTX,
+            num_predict=config.OLLAMA_NUM_PREDICT,
+            think=config.OLLAMA_THINK,
         )
         action_executor.assert_called_once_with(screen_width=1280, screen_height=720)
         self.assertEqual(agent.max_iterations, 7)

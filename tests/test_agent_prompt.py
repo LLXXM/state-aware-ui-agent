@@ -39,7 +39,7 @@ class AgentPromptTests(unittest.TestCase):
         self.agent.action_history = [{
             "iteration": 1,
             "arguments": {"action": "left_click", "coordinate": [100, 200]},
-            "outcome": "executed",
+            "outcome": "input_sent",
         }]
 
         self.agent._think_and_decide("Continue workflow", screenshot=object())
@@ -47,8 +47,9 @@ class AgentPromptTests(unittest.TestCase):
         prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs["user_query"]
         self.assertIn("Execution history from this task", prompt)
         self.assertIn('"action": "left_click"', prompt)
-        self.assertIn("executed", prompt)
-        self.assertIn("do not repeat successful steps", prompt)
+        self.assertIn("input_sent", prompt)
+        self.assertIn("does not prove the intended UI state changed", prompt)
+        self.assertIn("same small screen area", prompt)
 
     def test_system_prompt_reserves_answer_for_terminal_response(self):
         system_prompt = self.agent._get_system_prompt()
@@ -86,6 +87,25 @@ class AgentPromptTests(unittest.TestCase):
         prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs["user_query"]
         self.assertIn("Recording indicator is green", prompt)
         self.assertIn("observed", prompt)
+
+    def test_action_notes_are_included_in_later_prompt(self):
+        self.agent.iteration_count = 4
+        self.agent.action_history = [{
+            "iteration": 3,
+            "arguments": {"action": "left_click", "coordinate": [642, 734]},
+            "outcome": "input_sent",
+            "note": (
+                "Erfassung wird gestartet is visible, so GO was already accepted "
+                "and the start phase is done."
+            ),
+        }]
+
+        self.agent._think_and_decide("Finish workflow", screenshot=object())
+
+        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs["user_query"]
+        self.assertIn("note:", prompt)
+        self.assertIn("GO was already accepted", prompt)
+        self.assertIn("avoid repeating completed phases", prompt)
 
 
 if __name__ == "__main__":

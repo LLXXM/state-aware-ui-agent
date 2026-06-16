@@ -20,6 +20,17 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("Erfassung wird gestartet", IBAPDA_UI_CONTEXT)
         self.assertIn("Do not click GO a second time", IBAPDA_UI_CONTEXT)
         self.assertIn("confirmation dialog", IBAPDA_UI_CONTEXT)
+        self.assertIn("Required state check", IBAPDA_UI_CONTEXT)
+        self.assertIn("If the state is active", IBAPDA_UI_CONTEXT)
+        self.assertIn("Never describe that state as stopped", IBAPDA_UI_CONTEXT)
+        self.assertIn("can be collapsed", IBAPDA_UI_CONTEXT)
+        self.assertIn("bottom tab bar", IBAPDA_UI_CONTEXT)
+        self.assertIn("it does not mean the pane is open", IBAPDA_UI_CONTEXT)
+        self.assertIn("no status content rows", IBAPDA_UI_CONTEXT)
+        self.assertIn("ibaPDA-Ereignisprotokoll", IBAPDA_UI_CONTEXT)
+        self.assertIn("status_pane_collapsed", IBAPDA_UI_CONTEXT)
+        self.assertNotIn("Data Recording pane", IBAPDA_UI_CONTEXT)
+        self.assertNotIn("Data Recording status pane", IBAPDA_UI_CONTEXT)
 
 
 if __name__ == "__main__":

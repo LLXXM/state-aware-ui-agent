@@ -4,12 +4,24 @@ import os
 
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen3.5")
-OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5")
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "32768"))
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "1024"))
+OLLAMA_THINK = os.getenv("OLLAMA_THINK", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 MAX_ITERATIONS = 30
 SAVE_SCREENSHOTS = True
 SAVE_ACTION_OVERLAYS = True
-VERIFY_MOUSE_TARGETS = True
+VERIFY_MOUSE_TARGETS = os.getenv("VERIFY_MOUSE_TARGETS", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 SCREENSHOT_DIR = "agent_screenshots"
 LOG_LEVEL = "INFO"
 DRY_RUN = True

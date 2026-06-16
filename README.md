@@ -2,7 +2,7 @@
 
 Windows UI agent prototype for controlled ibaPDA test cases using Ollama and
 Qwen 3.5. The agent observes screenshots, proposes structured computer actions,
-verifies mouse targets, and records screenshot artifacts for each run.
+records mouse-target overlays, and can optionally verify targets before clicks.
 
 ## Structure
 
@@ -79,7 +79,10 @@ agent:
 ```powershell
 $env:OLLAMA_HOST = "http://192.168.21.148:11434"
 $env:OLLAMA_MODEL = "qwen3.5:9b"
-$env:OLLAMA_NUM_CTX = "16384"
+$env:OLLAMA_NUM_CTX = "32768"
+$env:OLLAMA_NUM_PREDICT = "1024"
+$env:OLLAMA_THINK = "true"
+$env:VERIFY_MOUSE_TARGETS = "false"
 ```
 
 These variables apply to the current PowerShell session. To persist the VM
@@ -88,7 +91,10 @@ configuration for future sessions:
 ```powershell
 setx OLLAMA_HOST "http://192.168.21.148:11434"
 setx OLLAMA_MODEL "qwen3.5:9b"
-setx OLLAMA_NUM_CTX "16384"
+setx OLLAMA_NUM_CTX "32768"
+setx OLLAMA_NUM_PREDICT "1024"
+setx OLLAMA_THINK "true"
+setx VERIFY_MOUSE_TARGETS "false"
 ```
 
 Open a new PowerShell terminal after using `setx`.
@@ -107,9 +113,19 @@ the stopped state, and closes the client safely.
 
 Without environment variables, the project connects to local Ollama at
 `http://127.0.0.1:11434`, uses `qwen3.5`, and requests a context window of
-`16384` tokens. If a remote machine does not have enough available memory,
-reduce `OLLAMA_NUM_CTX`, but values near `4096` may truncate screenshot and
-tool instructions for UI test cases.
+`32768` tokens. The defaults are intentionally tuned for maximum recognition
+quality first: `OLLAMA_THINK=true` and `OLLAMA_NUM_PREDICT=1024`. Once a test
+case is visually reliable, reduce these values step by step to trade quality
+for speed. Values near `4096` may truncate screenshot and tool instructions for
+UI test cases.
+
+By default, proposed clicks execute immediately after their overlay is saved,
+which makes wrong clicks visible during VM debugging and avoids a second slow
+model request. To restore pre-click visual verification for a run:
+
+```powershell
+$env:VERIFY_MOUSE_TARGETS = "true"
+```
 
 ## Add A Test Case
 
@@ -122,7 +138,8 @@ recording actions from their task.
 ## Safety
 
 - Move the mouse to the top-left corner to trigger the `pyautogui` failsafe.
-- Mouse targets are saved as overlays and visually verified before execution.
+- Mouse targets are always saved as overlays. Pre-click visual verification is
+  optional through `VERIFY_MOUSE_TARGETS=true`.
 - ibaPDA cleanup prevents duplicate client instances and avoids leaving Data
   Recording active after a test case.
 

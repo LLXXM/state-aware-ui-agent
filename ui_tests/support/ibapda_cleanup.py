@@ -12,10 +12,8 @@ from ui_tests.support.window_setup import (
 TASK = """
 Perform only this ibaPDA cleanup task on the existing foreground ibaPDA window:
 1. Do not open or launch ibaPDA. An existing instance has already been restored and focused.
-2. Inspect Data Recording state.
-3. If Data Recording is active, indicated by a 'Data Store' entry with a green
-   circular indicator and/or gray GO with red STOP, click the red Data Recording
-   STOP button and confirm only an unambiguous stop dialog.
+2. Use the ibaPDA UI context to inspect the Data Recording state before clicking anything.
+3. If Data Recording is active, stop it and confirm only an unambiguous stop dialog.
 4. If Data Recording is already stopped, do not click GO or STOP.
 5. Terminate with status success as soon as Data Recording is visibly stopped.
    The runner, not you, will close the existing ibaPDA window afterward.
@@ -61,7 +59,6 @@ def ensure_ibapda_closed(
         max_repeated_actions=2,
         max_consecutive_failures=2,
         allowed_actions={"left_click", "wait", "checkpoint", "terminate"},
-        max_executed_mouse_actions=2,
         additional_system_prompt=IBAPDA_UI_CONTEXT,
     )
 

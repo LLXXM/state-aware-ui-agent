@@ -36,9 +36,9 @@ class AgentSafetyTests(unittest.TestCase):
     def test_fourth_identical_executable_action_is_blocked(self):
         repeated = {"action": "double_click", "coordinate": [200, 300]}
         self.agent.action_history = [
-            {"iteration": 1, "arguments": repeated, "outcome": "executed"},
-            {"iteration": 2, "arguments": repeated, "outcome": "executed"},
-            {"iteration": 3, "arguments": repeated, "outcome": "executed"},
+            {"iteration": 1, "arguments": repeated, "outcome": "input_sent"},
+            {"iteration": 2, "arguments": repeated, "outcome": "input_sent"},
+            {"iteration": 3, "arguments": repeated, "outcome": "input_sent"},
         ]
         self.agent.iteration_count = 4
         self._model_action(repeated)
@@ -54,8 +54,8 @@ class AgentSafetyTests(unittest.TestCase):
     def test_checkpoint_breaks_consecutive_repeat_sequence(self):
         repeated = {"action": "left_click", "coordinate": [200, 300]}
         self.agent.action_history = [
-            {"iteration": 1, "arguments": repeated, "outcome": "executed"},
-            {"iteration": 2, "arguments": repeated, "outcome": "executed"},
+            {"iteration": 1, "arguments": repeated, "outcome": "input_sent"},
+            {"iteration": 2, "arguments": repeated, "outcome": "input_sent"},
             {
                 "iteration": 3,
                 "arguments": {"action": "checkpoint", "text": "Window changed"},
@@ -70,6 +70,83 @@ class AgentSafetyTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertFalse(self.agent.task_completed)
+
+    def test_rejected_tool_call_does_not_reset_repetition_guard(self):
+        repeated = {"action": "left_click", "coordinate": [200, 300]}
+        self.agent.action_history = [
+            {"iteration": 1, "arguments": repeated, "outcome": "input_sent"},
+            {"iteration": 2, "arguments": repeated, "outcome": "input_sent"},
+            {"iteration": 3, "arguments": repeated, "outcome": "input_sent"},
+            {
+                "iteration": 4,
+                "arguments": {"tool_name": "checkpoint", "arguments": {"text": "seen"}},
+                "outcome": "rejected_tool_call",
+            },
+        ]
+        self.agent.iteration_count = 5
+        self._model_action(repeated)
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertEqual(self.agent.task_status, "aborted")
+        self.assertEqual(self.agent.action_history[-1]["outcome"], "blocked_repetition")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_nearby_mouse_clicks_count_as_repeated_attempts(self):
+        self.agent.action_history = [
+            {
+                "iteration": 1,
+                "arguments": {"action": "left_click", "coordinate": [87, 56]},
+                "outcome": "input_sent",
+            },
+            {
+                "iteration": 2,
+                "arguments": {"action": "left_click", "coordinate": [89, 56]},
+                "outcome": "input_sent",
+            },
+            {
+                "iteration": 3,
+                "arguments": {"action": "left_click", "coordinate": [85, 58]},
+                "outcome": "input_sent",
+            },
+        ]
+        self.agent.iteration_count = 4
+        self._model_action({"action": "left_click", "coordinate": [90, 55]})
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertEqual(self.agent.task_status, "aborted")
+        self.assertEqual(self.agent.action_history[-1]["outcome"], "blocked_repetition")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_far_mouse_click_does_not_count_as_repeated_attempt(self):
+        self.agent.action_history = [
+            {
+                "iteration": 1,
+                "arguments": {"action": "left_click", "coordinate": [87, 56]},
+                "outcome": "input_sent",
+            },
+            {
+                "iteration": 2,
+                "arguments": {"action": "left_click", "coordinate": [89, 56]},
+                "outcome": "input_sent",
+            },
+            {
+                "iteration": 3,
+                "arguments": {"action": "left_click", "coordinate": [85, 58]},
+                "outcome": "input_sent",
+            },
+        ]
+        self.agent.action_executor.execute_computer_use_action.return_value = True
+        self._model_action({"action": "left_click", "coordinate": [130, 56]})
+
+        with patch("see_think_act_agent.time.sleep"):
+            result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertEqual(self.agent.action_history[-1]["outcome"], "input_sent")
 
     def test_consecutive_failed_executions_abort_task(self):
         self.agent.max_repeated_actions = 0

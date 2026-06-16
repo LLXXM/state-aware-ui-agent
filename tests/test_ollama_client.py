@@ -8,13 +8,19 @@ class OllamaVisionClientTests(unittest.TestCase):
     @patch("utils.ollama_client.ollama.Client")
     def test_uses_configured_remote_endpoint(self, client_class):
         client = OllamaVisionClient(
-            model="qwen3.5:9b", host="http://192.168.1.20:11434", num_ctx=16384
+            model="qwen3.5:9b",
+            host="http://192.168.1.20:11434",
+            num_ctx=8192,
+            num_predict=256,
+            think=False,
         )
 
         client_class.assert_called_once_with(host="http://192.168.1.20:11434")
         self.assertEqual(client.model, "qwen3.5:9b")
         self.assertEqual(client.host, "http://192.168.1.20:11434")
-        self.assertEqual(client.num_ctx, 16384)
+        self.assertEqual(client.num_ctx, 8192)
+        self.assertEqual(client.num_predict, 256)
+        self.assertFalse(client.think)
 
     @patch("utils.ollama_client.ollama.Client")
     def test_connection_lists_models_from_remote_client(self, client_class):
@@ -30,14 +36,17 @@ class OllamaVisionClientTests(unittest.TestCase):
 
     @patch("utils.ollama_client.ollama.Client")
     def test_chat_passes_configured_context_window(self, client_class):
-        client = OllamaVisionClient(model="qwen3.5:9b", num_ctx=16384)
+        client = OllamaVisionClient(
+            model="qwen3.5:9b", num_ctx=8192, num_predict=256, think=False
+        )
 
         client.chat(messages=[{"role": "user", "content": "Act"}])
 
         self.assertEqual(
             client_class.return_value.chat.call_args.kwargs["options"],
-            {"num_ctx": 16384},
+            {"num_ctx": 8192, "num_predict": 256},
         )
+        self.assertFalse(client_class.return_value.chat.call_args.kwargs["think"])
 
 
 if __name__ == "__main__":

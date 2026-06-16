@@ -1,8 +1,10 @@
 import unittest
 from unittest.mock import Mock, patch
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from ui_contexts import IBAPDA_UI_CONTEXT
-from ui_tests.run_test_case import load_test_case, run_test_case
+from ui_tests.run_test_case import _clear_artifacts_for_run, load_test_case, run_test_case
 from ui_tests.test_cases import UiTestCase
 
 
@@ -12,8 +14,30 @@ class TestCaseDefinitionTests(unittest.TestCase):
 
         self.assertEqual(case.case_id, "TF-00")
         self.assertEqual(case.additional_system_prompt, IBAPDA_UI_CONTEXT)
-        self.assertEqual(case.max_executed_mouse_actions, 5)
-        self.assertIn("Data Recording STOP", case.task)
+        self.assertIsNone(case.max_executed_mouse_actions)
+        self.assertIn("Use the ibaPDA UI context", case.task)
+        self.assertIn("Datenaufzeichnungsstatus", case.task)
+        self.assertIn("Complete the start phase once", case.task)
+        self.assertIn("do not click GO again", case.task)
+        self.assertIn("move only toward STOP", case.task)
+        self.assertNotIn("becomes active exactly once", case.task)
+        self.assertNotIn("Data Recording status pane", case.task)
+        self.assertNotIn("STOP is red", case.task)
+        self.assertNotIn("GO is gray", case.task)
+        self.assertNotIn("Data Store", case.task)
+        self.assertNotIn("Ansichten starten", case.task)
+
+    def test_artifact_cleanup_removes_previous_run_files(self):
+        with TemporaryDirectory() as temp_dir:
+            artifact_dir = Path(temp_dir) / "artifacts"
+            stale_file = artifact_dir / "old.png"
+            artifact_dir.mkdir()
+            stale_file.write_text("stale")
+
+            _clear_artifacts_for_run(str(artifact_dir))
+
+            self.assertTrue(artifact_dir.exists())
+            self.assertFalse(stale_file.exists())
 
 
 class TestCaseRunnerTests(unittest.TestCase):
@@ -51,7 +75,9 @@ class TestCaseRunnerTests(unittest.TestCase):
             },
         )
         kwargs = agent_class.call_args.kwargs
-        self.assertEqual(kwargs["max_executed_mouse_actions"], 5)
+        self.assertIsNone(kwargs["max_executed_mouse_actions"])
+        self.assertNotIn("mouse_target_regions", kwargs)
+        self.assertNotIn("blocked_mouse_targets", kwargs)
         self.assertEqual(kwargs["additional_system_prompt"], IBAPDA_UI_CONTEXT)
         self.assertEqual(kwargs["screenshot_dir"], "artifacts/ui_tests/tf_00")
         minimize.assert_called_once_with()

@@ -150,6 +150,18 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.agent.ollama_client.chat_with_image.assert_not_called()
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
+    @patch("see_think_act_agent.time.sleep")
+    def test_disabled_verification_executes_mouse_action_directly(self, sleep):
+        self.agent.verify_mouse_targets = False
+        self.agent.ollama_client.parse_computer_use_action.return_value = self._proposed_click()
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.agent.ollama_client.chat_with_image.assert_not_called()
+        self.agent.action_executor.execute_computer_use_action.assert_called_once()
+        sleep.assert_called_once_with(0.1)
+
 
 if __name__ == "__main__":
     unittest.main()

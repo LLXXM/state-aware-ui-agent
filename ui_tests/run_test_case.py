@@ -4,6 +4,8 @@ import argparse
 import importlib
 import json
 import re
+import shutil
+from pathlib import Path
 from typing import Any
 
 from see_think_act_agent import SeeThinkActAgent
@@ -32,9 +34,18 @@ def _not_required_result(message: str) -> dict[str, Any]:
     return {"success": True, "status": "not_required", "message": message}
 
 
+def _clear_artifacts_for_run(artifact_dir: str) -> None:
+    """Remove screenshots and overlays from earlier runs of the same test case."""
+    path = Path(artifact_dir)
+    if path.exists():
+        shutil.rmtree(path, ignore_errors=True)
+    path.mkdir(parents=True, exist_ok=True)
+
+
 def run_test_case(case: UiTestCase) -> dict[str, Any]:
     """Execute one test case using optional generic ibaPDA safety boundaries."""
     artifact_dir = f"artifacts/ui_tests/{case.case_id.lower().replace('-', '_')}"
+    _clear_artifacts_for_run(artifact_dir)
 
     if case.cleanup_ibapda_before:
         pre_cleanup = ensure_ibapda_closed(

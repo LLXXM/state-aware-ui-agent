@@ -15,6 +15,8 @@ class OllamaVisionClient:
         model: str = "qwen3.5",
         host: Optional[str] = None,
         num_ctx: Optional[int] = None,
+        num_predict: Optional[int] = None,
+        think: Optional[bool] = None,
     ):
         """
         Initialize Ollama client
@@ -23,11 +25,15 @@ class OllamaVisionClient:
             model: Model name available on the configured Ollama server.
             host: Ollama API endpoint, for example http://192.168.1.20:11434.
             num_ctx: Optional context window size used for each chat request.
+            num_predict: Optional maximum generated tokens for each request.
+            think: Whether the model should generate a separate reasoning trace.
         """
 
         self.model = model
         self.host = host
         self.num_ctx = num_ctx
+        self.num_predict = num_predict
+        self.think = think
         self.client = ollama.Client(host=host)
 
         
@@ -70,8 +76,15 @@ class OllamaVisionClient:
                 'stream': stream
             }
 
+            options = {}
             if self.num_ctx is not None:
-                request_params['options'] = {'num_ctx': self.num_ctx}
+                options['num_ctx'] = self.num_ctx
+            if self.num_predict is not None:
+                options['num_predict'] = self.num_predict
+            if options:
+                request_params['options'] = options
+            if self.think is not None:
+                request_params['think'] = self.think
             
             # Add tools if provided
             if tools:

@@ -48,6 +48,7 @@ class AgentCompletionTests(unittest.TestCase):
 
         self.assertFalse(result)
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
+        self.assertEqual(self.agent.action_history[0]["outcome"], "invalid_action")
 
     def test_unexpected_tool_cannot_terminate_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = {
@@ -60,6 +61,7 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertFalse(result)
         self.assertFalse(self.agent.task_completed)
         self.assertIsNone(self.agent.task_status)
+        self.assertEqual(self.agent.action_history[0]["outcome"], "rejected_tool_call")
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_missing_tool_name_cannot_execute_action(self):
@@ -71,6 +73,7 @@ class AgentCompletionTests(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertFalse(self.agent.task_completed)
+        self.assertEqual(self.agent.action_history[0]["outcome"], "rejected_tool_call")
 
     def test_structured_success_termination_completes_task(self):
         self.agent.ollama_client.parse_computer_use_action.return_value = {
@@ -137,6 +140,18 @@ class AgentCompletionTests(unittest.TestCase):
         }])
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
+    def test_standalone_action_tool_calls_are_rejected(self):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "checkpoint",
+            "arguments": {"text": "Data Recording has started"},
+        }
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertEqual(self.agent.action_history[0]["outcome"], "rejected_tool_call")
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
     @patch("see_think_act_agent.time.sleep")
     def test_executed_action_is_added_to_history(self, sleep):
         self.agent.post_action_delay = 0.2
@@ -152,9 +167,33 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertEqual(self.agent.action_history, [{
             "iteration": 1,
             "arguments": {"action": "type", "text": "hello"},
-            "outcome": "executed",
+            "outcome": "input_sent",
         }])
         sleep.assert_called_once_with(0.2)
+
+    @patch("see_think_act_agent.time.sleep")
+    def test_executed_action_keeps_model_state_note(self, sleep):
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {"action": "left_click", "coordinate": [100, 55]},
+        }
+        self.agent.action_executor.execute_computer_use_action.return_value = True
+
+        result = self.agent._execute_action({
+            "message": {
+                "thinking": (
+                    "The Datenaufzeichnungsstatus pane shows Data Store with a "
+                    "green indicator, so the start phase is done and the next "
+                    "workflow action is STOP."
+                )
+            },
+        })
+
+        self.assertTrue(result)
+        self.assertEqual(self.agent.action_history[0]["outcome"], "input_sent")
+        self.assertIn("start phase is done", self.agent.action_history[0]["note"])
+        self.assertIn("STOP", self.agent.action_history[0]["note"])
+        sleep.assert_called_once_with(1.0)
 
     def test_disallowed_action_aborts_before_execution(self):
         self.agent.allowed_actions = {"left_click", "terminate"}

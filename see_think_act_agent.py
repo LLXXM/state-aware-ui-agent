@@ -27,7 +27,7 @@ class SeeThinkActAgent:
     """
     
     def __init__(self,
-                 model: str = config.MODEL_NAME,
+                 model: str = config.OLLAMA_MODEL,
                  max_iterations: int = config.MAX_ITERATIONS,
                  save_screenshots: bool = config.SAVE_SCREENSHOTS,
                  screenshot_dir: str = config.SCREENSHOT_DIR,
@@ -77,6 +77,8 @@ class SeeThinkActAgent:
             model=model,
             host=config.OLLAMA_HOST,
             num_ctx=config.OLLAMA_NUM_CTX,
+            num_predict=config.OLLAMA_NUM_PREDICT,
+            think=config.OLLAMA_THINK,
         )
         
         # Get actual screen size
@@ -303,7 +305,10 @@ class SeeThinkActAgent:
             "The red crosshair in the image is the exact click or pointer target. "
             f"Prior action history is: {self._format_action_history() or 'none'}. "
             "Verify the marked target against the planning model's intended target; "
-            "do not choose a different next action. Use verify_mouse_target with "
+            "do not choose a different next action and do not relabel a marked "
+            "control as the desired control. If the intended target is contradictory "
+            "or unsafe for the stated task, reject it. "
+            "Use verify_mouse_target with "
             "decision='approve' only if the center of the red crosshair is clearly "
             "on that intended UI element. "
             "If it is misplaced, ambiguous, or unsafe, use decision='reject'."
@@ -362,18 +367,45 @@ class SeeThinkActAgent:
         history_lines = []
         for entry in self.action_history[-10:]:
             arguments = json.dumps(entry["arguments"], ensure_ascii=True, sort_keys=True)
+            note = entry.get("note")
+            note_text = ""
+            if note:
+                note_text = f"; note: {json.dumps(note, ensure_ascii=True)}"
             history_lines.append(
-                f"- Iteration {entry['iteration']}: {arguments} -> {entry['outcome']}"
+                f"- Iteration {entry['iteration']}: {arguments} -> "
+                f"{entry['outcome']}{note_text}"
             )
 
         return (
             "\n\nExecution history from this task:\n"
             + "\n".join(history_lines)
-            + "\nUse the current screenshot to verify effects and do not repeat successful steps unnecessarily."
+            + "\nAn outcome of 'input_sent' only means the input was issued to "
+            "the desktop; it does not prove the intended UI state changed. "
+            "The note records the model's visual observation and intended "
+            "workflow phase at the time of the action; use it together with "
+            "the current screenshot to avoid repeating completed phases. "
+            "Repeated input_sent mouse actions to the same small screen area "
+            "mean the approach is not making progress. "
+            "Use the current screenshot to verify effects before continuing or "
+            "repeating a step."
         )
 
+    @staticmethod
+    def _compact_action_note(note: str, limit: int = 500) -> str:
+        """Return a compact single-line note suitable for the action history."""
+        if not isinstance(note, str):
+            return ""
+        compact = " ".join(note.split())
+        if len(compact) <= limit:
+            return compact
+        return compact[: limit - 3].rstrip() + "..."
+
     def _record_action(
-        self, arguments: Dict[str, Any], outcome: str, overlay_path: Optional[str] = None
+        self,
+        arguments: Dict[str, Any],
+        outcome: str,
+        overlay_path: Optional[str] = None,
+        note: str = "",
     ) -> None:
         """Store a compact outcome record for later decisions."""
         entry = {
@@ -383,6 +415,9 @@ class SeeThinkActAgent:
         }
         if overlay_path is not None:
             entry["overlay_path"] = overlay_path
+        compact_note = self._compact_action_note(note)
+        if compact_note:
+            entry["note"] = compact_note
         self.action_history.append(entry)
 
     def _abort_task(self, reason: str) -> None:
@@ -409,17 +444,45 @@ class SeeThinkActAgent:
         """Return whether the action can modify or navigate the desktop."""
         return arguments.get('action') not in {'wait', 'checkpoint', 'answer', 'terminate'}
 
+    def _actions_match_for_repetition(
+        self, left: Dict[str, Any], right: Dict[str, Any]
+    ) -> bool:
+        """Return whether two executable actions should count as the same attempt."""
+        if left.get('action') != right.get('action'):
+            return False
+
+        if left.get('action') not in self.computer_use.MOUSE_ACTIONS:
+            return left == right
+
+        left_coordinate = left.get('coordinate')
+        right_coordinate = right.get('coordinate')
+        if (
+            not isinstance(left_coordinate, list)
+            or not isinstance(right_coordinate, list)
+            or len(left_coordinate) != 2
+            or len(right_coordinate) != 2
+        ):
+            return left == right
+
+        tolerance = 10
+        return all(
+            abs(left_coordinate[index] - right_coordinate[index]) <= tolerance
+            for index in range(2)
+        )
+
     def _would_repeat_action_excessively(self, arguments: Dict[str, Any]) -> bool:
-        """Detect an identical executable action proposed too many times in succession."""
+        """Detect an executable action proposed too many times in the same area."""
         max_repeats = getattr(self, 'max_repeated_actions', 0)
         if max_repeats <= 0 or not self._is_executable_action(arguments):
             return False
 
         previous_matches = 0
         for entry in reversed(self.action_history):
+            if entry['outcome'] in {'rejected_tool_call', 'invalid_action'}:
+                continue
             if not self._is_executable_action(entry['arguments']):
                 break
-            if entry['arguments'] != arguments:
+            if not self._actions_match_for_repetition(entry['arguments'], arguments):
                 break
             previous_matches += 1
 
@@ -525,26 +588,42 @@ class SeeThinkActAgent:
             action_name = action.get('name')
 
         if action_name != self.computer_use.name:
+            supplied_arguments = (
+                dict(arguments)
+                if isinstance(arguments, dict)
+                else {'raw_arguments': arguments}
+            )
+            self._record_action(
+                {'tool_name': action_name, 'arguments': supplied_arguments},
+                'rejected_tool_call',
+                note=action_intent,
+            )
             self.logger.warning(f"Rejected unexpected tool call: {action_name!r}")
             return False
 
         try:
             arguments = self.computer_use.validate_arguments(arguments)
         except ActionValidationError as error:
+            supplied_arguments = (
+                dict(arguments)
+                if isinstance(arguments, dict)
+                else {'raw_arguments': arguments}
+            )
+            self._record_action(supplied_arguments, 'invalid_action', note=action_intent)
             self.logger.warning(f"Rejected invalid model action: {error}")
             return False
 
         if not self._is_action_allowed(arguments):
-            self._record_action(arguments, 'blocked_policy')
+            self._record_action(arguments, 'blocked_policy', note=action_intent)
             self._abort_task(
                 f"action not permitted by active policy: {arguments.get('action')}"
             )
             return False
-        
+
         # Check for termination
         if arguments.get('action') == 'terminate':
             status = arguments.get('status')
-            self._record_action(arguments, status)
+            self._record_action(arguments, status, note=action_intent)
             self.task_completed = True
             self.task_status = status
             self.logger.info(f"Task terminated with status: {self.task_status}")
@@ -553,7 +632,7 @@ class SeeThinkActAgent:
         # Check for answer action (just observation)
         if arguments.get('action') == 'answer':
             answer_text = arguments.get('text', '')
-            self._record_action(arguments, 'answered')
+            self._record_action(arguments, 'answered', note=action_intent)
             self.task_completed = True
             self.task_status = 'answered'
             self.task_answer = answer_text
@@ -563,14 +642,14 @@ class SeeThinkActAgent:
         # Record an intermediate visual confirmation without ending the task
         if arguments.get('action') == 'checkpoint':
             checkpoint_text = arguments.get('text', '')
-            self._record_action(arguments, 'observed')
+            self._record_action(arguments, 'observed', note=action_intent)
             self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
 
         overlay_path = self._save_action_overlay(arguments)
 
         if self.dry_run and self._is_executable_action(arguments):
-            self._record_action(arguments, 'dry_run', overlay_path)
+            self._record_action(arguments, 'dry_run', overlay_path, note=action_intent)
             self.task_completed = True
             self.task_status = 'dry_run'
             self.dry_run_action = dict(arguments)
@@ -578,7 +657,9 @@ class SeeThinkActAgent:
             return True
 
         if self._would_repeat_action_excessively(arguments):
-            self._record_action(arguments, 'blocked_repetition', overlay_path)
+            self._record_action(
+                arguments, 'blocked_repetition', overlay_path, note=action_intent
+            )
             self._abort_task(
                 f"action repeated more than {self.max_repeated_actions} times: "
                 f"{arguments.get('action')}"
@@ -590,7 +671,9 @@ class SeeThinkActAgent:
             and getattr(self, 'verify_mouse_targets', False)
             and not self._verify_mouse_target(arguments, action_intent)
         ):
-            self._record_action(arguments, 'blocked_verification', overlay_path)
+            self._record_action(
+                arguments, 'blocked_verification', overlay_path, note=action_intent
+            )
             self._abort_task(
                 "mouse target verification rejected the proposed action: "
                 f"{self.last_mouse_verification['reason']}"
@@ -598,7 +681,9 @@ class SeeThinkActAgent:
             return False
 
         if self._mouse_action_budget_reached(arguments):
-            self._record_action(arguments, 'approval_required', overlay_path)
+            self._record_action(
+                arguments, 'approval_required', overlay_path, note=action_intent
+            )
             self.task_completed = True
             self.task_status = 'approval_required'
             self.approval_required_action = dict(arguments)
@@ -613,7 +698,12 @@ class SeeThinkActAgent:
             'name': action_name,
             'arguments': arguments
         })
-        self._record_action(arguments, 'executed' if success else 'failed', overlay_path)
+        self._record_action(
+            arguments,
+            'input_sent' if success else 'failed',
+            overlay_path,
+            note=action_intent,
+        )
 
         if not success and self._has_too_many_failures():
             self._abort_task(
@@ -778,7 +868,7 @@ def main():
         print("\nWARNING: Could not connect to Ollama or model not found")
         print("Make sure Ollama is running and the model is pulled:")
         print(f"  Ollama endpoint: {config.OLLAMA_HOST}")
-        print(f"  Required model: ollama run {config.MODEL_NAME}")
+        print(f"  Required model: ollama run {config.OLLAMA_MODEL}")
         return
     
     # Example task

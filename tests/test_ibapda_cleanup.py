@@ -42,12 +42,16 @@ class IbapdaCleanupTests(unittest.TestCase):
         self.assertEqual(
             kwargs["allowed_actions"], {"left_click", "wait", "checkpoint", "terminate"}
         )
-        self.assertEqual(kwargs["max_executed_mouse_actions"], 2)
+        self.assertNotIn("max_executed_mouse_actions", kwargs)
+        self.assertNotIn("blocked_mouse_targets", kwargs)
         self.assertEqual(kwargs["additional_system_prompt"], IBAPDA_UI_CONTEXT)
         task = agent.run.call_args.args[0]
         self.assertIn("Never click GO", task)
         self.assertIn("Never launch a new ibaPDA instance", task)
         self.assertIn("Never close the ibaPDA window yourself", task)
+        self.assertIn("Use the ibaPDA UI context", task)
+        self.assertNotIn("STOP is red", task)
+        self.assertNotIn("Data Store", task)
         close_window.assert_called_once_with()
         self.assertTrue(result["window_closed"])
 
