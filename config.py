@@ -1,6 +1,6 @@
 """Active runtime defaults for the See-Think-Act agent."""
 
-MODEL_NAME = "qwen3-vl:235b-cloud"
+MODEL_NAME = "qwen3.5:397b-cloud"
 MAX_ITERATIONS = 30
 SAVE_SCREENSHOTS = True
 SAVE_ACTION_OVERLAYS = True

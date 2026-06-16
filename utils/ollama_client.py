@@ -1,5 +1,5 @@
 """
-Ollama client for Qwen3-VL model with function calling support
+Ollama client for Qwen vision models with function calling support.
 """
 import ollama
 import json
@@ -10,18 +10,24 @@ import io
 
 
 class OllamaVisionClient:
-    """Client for interacting with Qwen3-VL via Ollama"""
+    """Client for interacting with Qwen vision models via Ollama."""
     
-    def __init__(self, model: str = "qwen3-vl:235b-cloud"):
+    def __init__(self, model: str = "qwen3.5:397b-cloud"):
         """
         Initialize Ollama client
         
         Args:
-            model: Model name to use (default: qwen3-vl:235b-cloud)
+            model: Model name to use (default: qwen3.5:397b-cloud)
         """
 
         self.model = model
         self.client = ollama
+
+    def _print_connection_help(self) -> None:
+        """Print the command a user can try when Ollama/model setup fails."""
+        print("\nERROR: Failed to initialize Ollama client")
+        print("Make sure Ollama is running and the model is pulled or available:")
+        print(f"  ollama run {self.model}")
 
         
     def encode_image_to_base64(self, image: Image.Image, format: str = 'PNG') -> str:
@@ -172,7 +178,7 @@ class OllamaVisionClient:
     
     def test_connection(self) -> bool:
         """
-        Test connection to Ollama and model availability
+        Test connection to Ollama and that the configured model can answer.
         
         Returns:
             True if connection successful, False otherwise
@@ -198,14 +204,32 @@ class OllamaVisionClient:
 
             if self.model in model_names or any(self.model in name for name in model_names):
                 print(f"OK: Model '{self.model}' is available")
-                return True
             else:
-                print(f"ERROR: Model '{self.model}' not found")
-                print(f"Available models: {model_names}")
-                return False
+                try:
+                    self.client.show(self.model)
+                    print(f"OK: Model '{self.model}' metadata is available")
+                except Exception:
+                    print(f"ERROR: Model '{self.model}' not found")
+                    print(f"Available models: {model_names}")
+                    self._print_connection_help()
+                    return False
+
+            self.client.chat(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Connection check. Reply with OK.",
+                    }
+                ],
+                stream=False,
+            )
+            print(f"OK: Model '{self.model}' answered a chat request")
+            return True
 
         except Exception as e:
             print(f"ERROR: Could not connect to Ollama: {e}")
+            self._print_connection_help()
             return False
 
 
@@ -219,4 +243,4 @@ if __name__ == "__main__":
     else:
         print("\nERROR: Failed to initialize Ollama client")
         print("Make sure Ollama is running and the model is pulled:")
-        print("  ollama run qwen3-vl:235b-cloud")
+        print(f"  ollama run {client.model}")

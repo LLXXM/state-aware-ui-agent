@@ -1,7 +1,7 @@
 # Computer-Use-Agent
 
 Windows UI agent prototype for controlled ibaPDA test cases using Ollama and
-Qwen3-VL. The agent observes screenshots, proposes structured computer actions,
+Qwen3.5. The agent observes screenshots, proposes structured computer actions,
 verifies mouse targets, and records screenshot artifacts for each run.
 
 ## Structure

@@ -1,6 +1,6 @@
 """
 See-Think-Act Agent for Windows 11
-Autonomous agent that captures screenshots, analyzes with Qwen3-VL via Ollama, and performs actions
+Autonomous agent that captures screenshots, analyzes with Qwen3.5 via Ollama, and performs actions
 """
 import time
 import json
@@ -22,7 +22,7 @@ class SeeThinkActAgent:
     """
     Autonomous AI Agent that can See, Think, and Act
     - See: Captures screenshots of the desktop
-    - Think: Analyzes with Qwen3-VL model via Ollama
+    - Think: Analyzes with Qwen3.5 model via Ollama
     - Act: Executes actions based on model's decisions
     """
     
@@ -773,7 +773,7 @@ def main():
     if not agent.ollama_client.test_connection():
         print("\nWARNING: Could not connect to Ollama or model not found")
         print("Make sure Ollama is running and the model is pulled:")
-        print("  ollama run qwen3-vl:235b-cloud")
+        print(f"  ollama run {config.MODEL_NAME}")
         return
     
     # Example task
