@@ -2,6 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import config
 from utils.ollama_client import OllamaVisionClient
 
 
@@ -19,6 +20,10 @@ class OllamaVisionClientConnectionTests(unittest.TestCase):
         self.assertEqual(
             client.client.chat.call_args.kwargs["model"],
             "qwen3-vl:235b-cloud",
+        )
+        self.assertEqual(
+            client.client.chat.call_args.kwargs["options"],
+            config.MODEL_OPTIONS,
         )
 
     def test_connection_fails_when_listed_model_chat_fails(self):
@@ -54,6 +59,17 @@ class OllamaVisionClientConnectionTests(unittest.TestCase):
         self.assertTrue(client.test_connection())
         client.client.show.assert_called_once_with("qwen3.5:397b-cloud")
         client.client.chat.assert_called_once()
+
+    def test_chat_sends_configured_model_options(self):
+        options = {"temperature": 0.1, "num_ctx": 32768, "num_predict": 512}
+        client = OllamaVisionClient(model="qwen3.5:397b-cloud", options=options)
+        client.client = Mock()
+        client.client.chat.return_value = {"message": {"content": "OK"}}
+
+        client.chat(messages=[{"role": "user", "content": "hello"}])
+
+        client.client.chat.assert_called_once()
+        self.assertEqual(client.client.chat.call_args.kwargs["options"], options)
 
 
 if __name__ == "__main__":

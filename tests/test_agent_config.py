@@ -26,6 +26,7 @@ class AgentConfigTests(unittest.TestCase):
             "dry_run": config.DRY_RUN,
             "allowed_actions": config.ALLOWED_ACTIONS,
             "max_executed_mouse_actions": config.MAX_EXECUTED_MOUSE_ACTIONS,
+            "model_options": None,
         }
 
         for name, default in expected_defaults.items():
@@ -62,10 +63,14 @@ class AgentConfigTests(unittest.TestCase):
             dry_run=False,
             allowed_actions={"left_click", "terminate"},
             max_executed_mouse_actions=2,
+            model_options={"temperature": 0},
             additional_system_prompt="Application controls",
         )
 
-        ollama_client.assert_called_once_with(model="custom-model")
+        ollama_client.assert_called_once_with(
+            model="custom-model",
+            options={"temperature": 0},
+        )
         action_executor.assert_called_once_with(screen_width=1280, screen_height=720)
         self.assertEqual(agent.max_iterations, 7)
         self.assertEqual(agent.max_task_duration, 25)

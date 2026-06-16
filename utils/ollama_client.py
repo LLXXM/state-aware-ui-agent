@@ -1,26 +1,35 @@
 """
 Ollama client for Qwen vision models with function calling support.
 """
-import ollama
 import json
 import base64
 from typing import List, Dict, Any, Optional
-from PIL import Image
 import io
+
+import ollama
+from PIL import Image
+
+import config
 
 
 class OllamaVisionClient:
     """Client for interacting with Qwen vision models via Ollama."""
     
-    def __init__(self, model: str = "qwen3.5:397b-cloud"):
+    def __init__(
+        self,
+        model: str = config.MODEL_NAME,
+        options: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize Ollama client
         
         Args:
-            model: Model name to use (default: qwen3.5:397b-cloud)
+            model: Model name to use
+            options: Ollama generation options
         """
 
         self.model = model
+        self.options = dict(config.MODEL_OPTIONS if options is None else options)
         self.client = ollama
 
     def _print_connection_help(self) -> None:
@@ -66,7 +75,8 @@ class OllamaVisionClient:
             request_params = {
                 'model': self.model,
                 'messages': messages,
-                'stream': stream
+                'stream': stream,
+                'options': self.options,
             }
             
             # Add tools if provided
@@ -223,6 +233,7 @@ class OllamaVisionClient:
                     }
                 ],
                 stream=False,
+                options=self.options,
             )
             print(f"OK: Model '{self.model}' answered a chat request")
             return True

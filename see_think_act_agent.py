@@ -42,6 +42,7 @@ class SeeThinkActAgent:
                  verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS,
                  allowed_actions: Optional[set] = config.ALLOWED_ACTIONS,
                  max_executed_mouse_actions: Optional[int] = config.MAX_EXECUTED_MOUSE_ACTIONS,
+                 model_options: Optional[Dict[str, Any]] = None,
                  additional_system_prompt: Optional[str] = None):
         """
         Initialize the See-Think-Act Agent
@@ -62,6 +63,7 @@ class SeeThinkActAgent:
             verify_mouse_targets: Require model approval of marked mouse targets
             allowed_actions: Optional set of permitted actions; None permits the schema
             max_executed_mouse_actions: Mouse actions permitted before pausing for approval
+            model_options: Optional Ollama generation options
             additional_system_prompt: Optional application-specific UI knowledge
         """
         # Setup logging
@@ -73,7 +75,7 @@ class SeeThinkActAgent:
         
         # Initialize components
         self.screenshot_capture = ScreenshotCapture()
-        self.ollama_client = OllamaVisionClient(model=model)
+        self.ollama_client = OllamaVisionClient(model=model, options=model_options)
         
         # Get actual screen size
         screen_width, screen_height = self.screenshot_capture.get_screen_size()
