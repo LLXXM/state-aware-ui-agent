@@ -64,6 +64,14 @@ The action to perform. Available actions:
                 ],
                 "type": "string",
             },
+            "intent": {
+                "description": (
+                    "Required. Short purpose of this specific action, for reporting and action history. "
+                    "Use one concise sentence that explains what this action is meant to accomplish, "
+                    "for example: 'Click STOP to stop active Data Recording.'"
+                ),
+                "type": "string",
+            },
             "keys": {
                 "description": "Keyboard keys for `action=key`, for example [`ctrl`, `l`] or [`enter`].",
                 "items": {"type": "string"},
@@ -96,7 +104,7 @@ The action to perform. Available actions:
                 "type": "string",
             },
         },
-        "required": ["action"],
+        "required": ["action", "intent"],
         "type": "object",
     }
 
@@ -112,6 +120,7 @@ Use a mouse and keyboard to interact with a computer.
 * Coordinates are normalized to a virtual {self.display_width_px}x{self.display_height_px} display.
 * Inspect the latest screenshot before clicking an element.
 * Take one action at a time and use `wait` when the interface needs time to update.
+* Always include `intent` with every tool call as one concise sentence explaining why this action is next.
 """.strip()
 
     @property
@@ -134,6 +143,10 @@ Use a mouse and keyboard to interact with a computer.
             action = "left_click"
         if action not in self.ACTIONS:
             raise ActionValidationError(f"Unsupported action: {action!r}")
+
+        if "intent" in arguments:
+            if not isinstance(arguments["intent"], str) or not arguments["intent"].strip():
+                raise ActionValidationError("Intent must be a non-empty string")
 
         if action in self.MOUSE_ACTIONS:
             self._validate_coordinate(arguments.get("coordinate"))

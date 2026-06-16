@@ -8,6 +8,8 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("Ansichten starten", IBAPDA_UI_CONTEXT)
         self.assertIn("GO is directly to the left of STOP", IBAPDA_UI_CONTEXT)
         self.assertIn("labeled 'GO'", IBAPDA_UI_CONTEXT)
+        self.assertIn("center of the red or gray circle", IBAPDA_UI_CONTEXT)
+        self.assertIn("client preferences controls", IBAPDA_UI_CONTEXT)
         self.assertIn("two-person icon", IBAPDA_UI_CONTEXT)
         self.assertIn("triangle/play symbol", IBAPDA_UI_CONTEXT)
         self.assertIn("Never", IBAPDA_UI_CONTEXT)

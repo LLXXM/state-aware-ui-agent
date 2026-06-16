@@ -15,6 +15,33 @@ class ComputerUseSchemaTests(unittest.TestCase):
         self.assertIn("keys", parameters)
         self.assertIn("pixels", parameters)
         self.assertIn("time", parameters)
+        self.assertIn("intent", parameters)
+        self.assertIn("intent", function["parameters"]["required"])
+
+    def test_accepts_action_intent(self):
+        arguments = ComputerUse().validate_arguments({
+            "action": "wait",
+            "time": 2,
+            "intent": "Wait for ibaPDA to finish loading.",
+        })
+
+        self.assertEqual(arguments["intent"], "Wait for ibaPDA to finish loading.")
+
+    def test_rejects_empty_action_intent(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({
+                "action": "wait",
+                "time": 2,
+                "intent": "",
+            })
+
+    def test_runtime_still_accepts_legacy_action_without_intent(self):
+        arguments = ComputerUse().validate_arguments({
+            "action": "wait",
+            "time": 2,
+        })
+
+        self.assertEqual(arguments["action"], "wait")
 
     def test_accepts_hotkey_arguments(self):
         arguments = ComputerUse().validate_arguments({

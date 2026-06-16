@@ -127,14 +127,14 @@ class AgentCompletionTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertFalse(self.agent.task_completed)
         self.assertIsNone(self.agent.task_status)
-        self.assertEqual(self.agent.action_history, [{
-            "iteration": 1,
-            "arguments": {
-                "action": "checkpoint",
-                "text": "Recording indicator is green",
-            },
-            "outcome": "observed",
-        }])
+        self.assertEqual(len(self.agent.action_history), 1)
+        self.assertEqual(self.agent.action_history[0]["iteration"], 1)
+        self.assertEqual(
+            self.agent.action_history[0]["arguments"],
+            {"action": "checkpoint", "text": "Recording indicator is green"},
+        )
+        self.assertEqual(self.agent.action_history[0]["outcome"], "observed")
+        self.assertIn("timestamp", self.agent.action_history[0])
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     @patch("see_think_act_agent.time.sleep")
@@ -142,19 +142,58 @@ class AgentCompletionTests(unittest.TestCase):
         self.agent.post_action_delay = 0.2
         self.agent.ollama_client.parse_computer_use_action.return_value = {
             "name": "computer_use",
-            "arguments": {"action": "type", "text": "hello"},
+            "arguments": {
+                "action": "type",
+                "text": "hello",
+                "intent": "Type the requested text into the focused field.",
+            },
         }
         self.agent.action_executor.execute_computer_use_action.return_value = True
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        self.assertEqual(self.agent.action_history, [{
-            "iteration": 1,
-            "arguments": {"action": "type", "text": "hello"},
-            "outcome": "executed",
-        }])
+        self.assertEqual(len(self.agent.action_history), 1)
+        self.assertEqual(self.agent.action_history[0]["iteration"], 1)
+        self.assertEqual(
+            self.agent.action_history[0]["arguments"],
+            {
+                "action": "type",
+                "text": "hello",
+                "intent": "Type the requested text into the focused field.",
+            },
+        )
+        self.assertEqual(self.agent.action_history[0]["outcome"], "executed")
+        self.assertEqual(
+            self.agent.action_history[0]["intent"],
+            "Type the requested text into the focused field.",
+        )
+        self.assertIn("timestamp", self.agent.action_history[0])
         sleep.assert_called_once_with(0.2)
+
+    @patch("see_think_act_agent.time.sleep")
+    def test_action_history_uses_tool_intent_not_full_reasoning(self, _sleep):
+        self.agent.post_action_delay = 0
+        self.agent.ollama_client.parse_computer_use_action.return_value = {
+            "name": "computer_use",
+            "arguments": {
+                "action": "key",
+                "keys": ["enter"],
+                "intent": "Confirm the visible dialog.",
+            },
+        }
+        self.agent.action_executor.execute_computer_use_action.return_value = True
+
+        self.agent._execute_action({
+            "message": {
+                "thinking": "Long reasoning with many observations that should stay out of intent."
+            }
+        })
+
+        self.assertEqual(
+            self.agent.action_history[0]["intent"],
+            "Confirm the visible dialog.",
+        )
 
     def test_disallowed_action_aborts_before_execution(self):
         self.agent.allowed_actions = {"left_click", "terminate"}

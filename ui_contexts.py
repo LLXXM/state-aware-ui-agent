@@ -13,6 +13,10 @@ Data Recording controls:
 - GO is directly to the left of STOP.
 - The GO/STOP pair is grouped between a two-person icon on its left and gear
   icons on its right.
+- When clicking GO or STOP, target the center of the filled circular text button
+  itself. For STOP, click the center of the red circle containing the
+  white 'STOP' text. Do not click the gear icons or client preferences controls
+  immediately to the right of STOP.
 
 Data Recording states:
 - Initial Data Recording state is not guaranteed. When the client opens, Data

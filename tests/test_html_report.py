@@ -15,6 +15,7 @@ class HtmlRunReportTests(unittest.TestCase):
             report.start("Run TF-00", metadata={"model": "qwen3.5:397b-cloud"})
             report.add_iteration({
                 "iteration": 1,
+                "timestamp": "2026-06-16T18:30:00",
                 "screenshot_path": str(screenshot),
                 "user_prompt": "What should I do first?",
                 "system_prompt": "Use computer_use.",
@@ -38,6 +39,7 @@ class HtmlRunReportTests(unittest.TestCase):
                 },
                 "action_record": {
                     "arguments": {"action": "double_click"},
+                    "intent": "Open ibaPDA Client from the desktop shortcut.",
                     "outcome": "executed",
                 },
             })
@@ -46,7 +48,9 @@ class HtmlRunReportTests(unittest.TestCase):
             html = report.report_path.read_text(encoding="utf-8")
             self.assertIn("Run TF-00", html)
             self.assertIn("Iteration 1", html)
+            self.assertIn("2026-06-16T18:30:00", html)
             self.assertIn("I will double-click the ibaPDA icon.", html)
+            self.assertIn("Open ibaPDA Client from the desktop shortcut.", html)
             self.assertIn("computer_use", html)
             self.assertIn("double_click", html)
             self.assertIn("screenshot.png", html)

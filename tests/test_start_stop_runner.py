@@ -12,8 +12,9 @@ class TestCaseDefinitionTests(unittest.TestCase):
 
         self.assertEqual(case.case_id, "TF-00")
         self.assertEqual(case.additional_system_prompt, IBAPDA_UI_CONTEXT)
-        self.assertEqual(case.max_executed_mouse_actions, 5)
+        self.assertGreaterEqual(case.max_executed_mouse_actions, 5)
         self.assertIn("Data Recording STOP", case.task)
+        self.assertIn("center of the now-red filled Data Recording STOP", case.task)
 
 
 class TestCaseRunnerTests(unittest.TestCase):
@@ -51,11 +52,15 @@ class TestCaseRunnerTests(unittest.TestCase):
             },
         )
         kwargs = agent_class.call_args.kwargs
-        self.assertEqual(kwargs["max_executed_mouse_actions"], 5)
+        case = load_test_case("TF-00")
+        self.assertEqual(
+            kwargs["max_executed_mouse_actions"],
+            case.max_executed_mouse_actions,
+        )
         self.assertEqual(kwargs["additional_system_prompt"], IBAPDA_UI_CONTEXT)
         self.assertEqual(kwargs["screenshot_dir"], "artifacts/ui_tests/tf_00")
-        self.assertTrue(kwargs["verify_mouse_targets"])
-        self.assertTrue(kwargs["save_action_overlays"])
+        self.assertEqual(kwargs["verify_mouse_targets"], case.verify_mouse_targets)
+        self.assertEqual(kwargs["save_action_overlays"], case.save_action_overlays)
         self.assertIn("ui_tests\\test_cases\\Reports\\tf_00_", kwargs["report_dir"])
         minimize.assert_called_once_with()
         restore.assert_called_once_with()

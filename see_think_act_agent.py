@@ -281,7 +281,7 @@ class SeeThinkActAgent:
 
     @staticmethod
     def _extract_action_intent(response: Dict[str, Any]) -> str:
-        """Extract the planning model's explanation for a proposed action."""
+        """Extract the planning model's explanation for target verification."""
         if isinstance(response, dict):
             message = response.get("message", {})
         else:
@@ -290,6 +290,14 @@ class SeeThinkActAgent:
         if isinstance(message, dict):
             return message.get("thinking") or message.get("content") or ""
         return getattr(message, "thinking", None) or getattr(message, "content", None) or ""
+
+    @staticmethod
+    def _action_intent_from_arguments(arguments: Dict[str, Any]) -> Optional[str]:
+        """Return a short model-supplied action intent for history/reporting."""
+        intent = arguments.get("intent")
+        if isinstance(intent, str) and intent.strip():
+            return intent.strip()
+        return None
 
     def _verify_mouse_target(
         self, arguments: Dict[str, Any], action_intent: str = ""
@@ -370,8 +378,12 @@ class SeeThinkActAgent:
         history_lines = []
         for entry in self.action_history[-10:]:
             arguments = json.dumps(entry["arguments"], ensure_ascii=True, sort_keys=True)
+            timestamp = entry.get("timestamp", "unknown time")
+            intent = entry.get("intent")
+            intent_text = f" intent={intent!r}" if intent else ""
             history_lines.append(
-                f"- Iteration {entry['iteration']}: {arguments} -> {entry['outcome']}"
+                f"- {timestamp} iteration {entry['iteration']}: "
+                f"{arguments}{intent_text} -> {entry['outcome']}"
             )
 
         return (
@@ -381,14 +393,21 @@ class SeeThinkActAgent:
         )
 
     def _record_action(
-        self, arguments: Dict[str, Any], outcome: str, overlay_path: Optional[str] = None
+        self,
+        arguments: Dict[str, Any],
+        outcome: str,
+        overlay_path: Optional[str] = None,
+        intent: Optional[str] = None,
     ) -> None:
         """Store a compact outcome record for later decisions."""
         entry = {
             "iteration": self.iteration_count,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
             "arguments": dict(arguments),
             "outcome": outcome,
         }
+        if intent:
+            entry["intent"] = intent
         if overlay_path is not None:
             entry["overlay_path"] = overlay_path
         self.action_history.append(entry)
@@ -548,9 +567,11 @@ class SeeThinkActAgent:
         except ActionValidationError as error:
             self.logger.warning(f"Rejected invalid model action: {error}")
             return False
+        report_intent = self._action_intent_from_arguments(arguments)
+        verification_intent = report_intent or action_intent
 
         if not self._is_action_allowed(arguments):
-            self._record_action(arguments, 'blocked_policy')
+            self._record_action(arguments, 'blocked_policy', intent=report_intent)
             self._abort_task(
                 f"action not permitted by active policy: {arguments.get('action')}"
             )
@@ -559,7 +580,7 @@ class SeeThinkActAgent:
         # Check for termination
         if arguments.get('action') == 'terminate':
             status = arguments.get('status')
-            self._record_action(arguments, status)
+            self._record_action(arguments, status, intent=report_intent)
             self.task_completed = True
             self.task_status = status
             self.logger.info(f"Task terminated with status: {self.task_status}")
@@ -568,7 +589,7 @@ class SeeThinkActAgent:
         # Check for answer action (just observation)
         if arguments.get('action') == 'answer':
             answer_text = arguments.get('text', '')
-            self._record_action(arguments, 'answered')
+            self._record_action(arguments, 'answered', intent=report_intent)
             self.task_completed = True
             self.task_status = 'answered'
             self.task_answer = answer_text
@@ -578,14 +599,14 @@ class SeeThinkActAgent:
         # Record an intermediate visual confirmation without ending the task
         if arguments.get('action') == 'checkpoint':
             checkpoint_text = arguments.get('text', '')
-            self._record_action(arguments, 'observed')
+            self._record_action(arguments, 'observed', intent=report_intent)
             self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
 
         overlay_path = self._save_action_overlay(arguments)
 
         if self.dry_run and self._is_executable_action(arguments):
-            self._record_action(arguments, 'dry_run', overlay_path)
+            self._record_action(arguments, 'dry_run', overlay_path, report_intent)
             self.task_completed = True
             self.task_status = 'dry_run'
             self.dry_run_action = dict(arguments)
@@ -593,7 +614,7 @@ class SeeThinkActAgent:
             return True
 
         if self._would_repeat_action_excessively(arguments):
-            self._record_action(arguments, 'blocked_repetition', overlay_path)
+            self._record_action(arguments, 'blocked_repetition', overlay_path, report_intent)
             self._abort_task(
                 f"action repeated more than {self.max_repeated_actions} times: "
                 f"{arguments.get('action')}"
@@ -603,9 +624,9 @@ class SeeThinkActAgent:
         if (
             arguments.get('action') in self.computer_use.MOUSE_ACTIONS
             and getattr(self, 'verify_mouse_targets', False)
-            and not self._verify_mouse_target(arguments, action_intent)
+            and not self._verify_mouse_target(arguments, verification_intent)
         ):
-            self._record_action(arguments, 'blocked_verification', overlay_path)
+            self._record_action(arguments, 'blocked_verification', overlay_path, report_intent)
             self._abort_task(
                 "mouse target verification rejected the proposed action: "
                 f"{self.last_mouse_verification['reason']}"
@@ -613,7 +634,7 @@ class SeeThinkActAgent:
             return False
 
         if self._mouse_action_budget_reached(arguments):
-            self._record_action(arguments, 'approval_required', overlay_path)
+            self._record_action(arguments, 'approval_required', overlay_path, report_intent)
             self.task_completed = True
             self.task_status = 'approval_required'
             self.approval_required_action = dict(arguments)
@@ -628,7 +649,12 @@ class SeeThinkActAgent:
             'name': action_name,
             'arguments': arguments
         })
-        self._record_action(arguments, 'executed' if success else 'failed', overlay_path)
+        self._record_action(
+            arguments,
+            'executed' if success else 'failed',
+            overlay_path,
+            report_intent,
+        )
 
         if not success and self._has_too_many_failures():
             self._abort_task(
@@ -672,6 +698,11 @@ class SeeThinkActAgent:
         action_record = getattr(self, 'last_action_record', None)
         report.add_iteration({
             "iteration": self.iteration_count,
+            "timestamp": getattr(
+                self,
+                'current_iteration_started_at',
+                datetime.now().isoformat(timespec="seconds"),
+            ),
             "screenshot_path": getattr(self, 'current_screenshot_path', None),
             "overlay_path": (
                 action_record or {}
@@ -734,6 +765,7 @@ class SeeThinkActAgent:
                     break
 
                 self.iteration_count += 1
+                self.current_iteration_started_at = datetime.now().isoformat(timespec="seconds")
                 self.logger.info(f"\n{'=' * 80}")
                 self.logger.info(f"Iteration {self.iteration_count}/{self.max_iterations}")
                 self.logger.info(f"{'=' * 80}")

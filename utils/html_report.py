@@ -23,6 +23,7 @@ class HtmlRunReport:
         self.metadata: dict[str, Any] = {}
         self.iterations: list[dict[str, Any]] = []
         self.result: Optional[dict[str, Any]] = None
+        self.finished_at: Optional[datetime] = None
 
     def start(self, task: str, metadata: Optional[dict[str, Any]] = None) -> None:
         self.task = task
@@ -34,6 +35,7 @@ class HtmlRunReport:
         self.write()
 
     def finish(self, result: dict[str, Any]) -> None:
+        self.finished_at = datetime.now()
         self.result = dict(result)
         self.write()
 
@@ -82,10 +84,12 @@ class HtmlRunReport:
         action_record = record.get("action_record")
         tool_call = record.get("tool_call")
         verification = record.get("mouse_verification")
+        intent = (action_record or {}).get("intent")
 
         return f"""
         <section class="iteration">
           <h2>Iteration {self._text(record.get("iteration"))}</h2>
+          <div class="timestamp">Started: {self._text(record.get("timestamp"))}</div>
           <div class="grid">
             <div>
               <h3>Screenshot</h3>
@@ -97,6 +101,8 @@ class HtmlRunReport:
               <pre>{self._text(reasoning)}</pre>
               <h3>Tool Call</h3>
               <pre>{self._json_block(tool_call)}</pre>
+              <h3>Action Intent</h3>
+              <pre>{self._text(intent)}</pre>
               <h3>Action Outcome</h3>
               <pre>{self._json_block(action_record)}</pre>
               <h3>Mouse Verification</h3>
@@ -121,6 +127,11 @@ class HtmlRunReport:
         iterations = "\n".join(self._render_iteration(item) for item in self.iterations)
         result = self._json_block(self.result) if self.result is not None else "Run in progress"
         metadata = self._json_block(self.metadata)
+        finished = (
+            self.finished_at.isoformat(timespec="seconds")
+            if self.finished_at is not None
+            else "Run in progress"
+        )
         return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -137,6 +148,7 @@ class HtmlRunReport:
     img {{ max-width: 100%; border: 1px solid #c8cdd5; border-radius: 4px; background: white; }}
     pre {{ white-space: pre-wrap; overflow-wrap: anywhere; background: #f1f3f5; padding: 12px; border-radius: 4px; }}
     code {{ overflow-wrap: anywhere; }}
+    .timestamp {{ color: #52606d; margin: -6px 0 12px; }}
     figcaption {{ margin-bottom: 8px; color: #3f4854; }}
     @media (max-width: 850px) {{ .grid {{ grid-template-columns: 1fr; }} }}
   </style>
@@ -145,6 +157,7 @@ class HtmlRunReport:
   <header>
     <h1>{self._text(self.title)}</h1>
     <div>Started: {self._text(self.started_at.isoformat(timespec="seconds"))}</div>
+    <div>Finished: {self._text(finished)}</div>
   </header>
   <main>
     <section>
