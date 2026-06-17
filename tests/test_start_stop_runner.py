@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 from ui_contexts import IBAPDA_UI_CONTEXT
 from ui_contexts import IBAPDA_TF_01_LAYOUT_CONTEXT
 from ui_contexts import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
+from ui_contexts import IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
 from ui_tests.run_test_case import default_report_dir_for_case, load_test_case, run_test_case
 from ui_tests.test_cases import UiTestCase
 
@@ -56,6 +57,32 @@ class TestCaseDefinitionTests(unittest.TestCase):
         self.assertIn("right_click", case.allowed_actions)
         self.assertIn("terminate", case.allowed_actions)
         self.assertNotIn("answer", case.allowed_actions)
+
+    def test_tf_03_defines_client_preferences_language_configuration(self):
+        case = load_test_case("TF-03")
+
+        self.assertEqual(case.case_id, "TF-03")
+        self.assertEqual(
+            case.additional_system_prompt,
+            IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT,
+        )
+        self.assertIn("Data Recording is not required", case.task)
+        self.assertIn("Client Preferences", case.task)
+        self.assertIn("gear icon directly", case.task)
+        self.assertIn("Allgemein", case.task)
+        self.assertIn("Digitale Textanzeige", case.task)
+        self.assertIn("Kreisansicht -> Ansicht", case.task)
+        self.assertIn("General", case.task)
+        self.assertIn("Text digital display", case.task)
+        self.assertIn("Circle View -> Visuals", case.task)
+        self.assertIn("概 览", case.task)
+        self.assertIn("文本数 显", case.task)
+        self.assertIn("圆视图 -> 显示", case.task)
+        self.assertIn("double_click", case.allowed_actions)
+        self.assertIn("checkpoint", case.allowed_actions)
+        self.assertIn("terminate", case.allowed_actions)
+        self.assertNotIn("answer", case.allowed_actions)
+        self.assertGreaterEqual(case.max_iterations, 50)
 
 
 class TestCaseRunnerTests(unittest.TestCase):

@@ -267,6 +267,107 @@ Safety boundaries:
 """
 
 
+IBAPDA_CLIENT_PREFERENCES_TREE_CONTEXT = """
+Client preferences dialog and tree navigation:
+- The Client Preferences dialog is opened from the small gear icon directly to
+  the right of the Data Recording STOP button in the top toolbar. This is the
+  client-preferences gear, not the Data Recording GO/STOP pair itself.
+- In the top toolbar, locate the filled circular Data Recording buttons first:
+  GO is on the left and STOP is immediately to its right. The client-preferences
+  gear icon is the small black/gray gear immediately to the right of STOP and
+  immediately to the left of the layout selection dropdown. It is the first gear
+  after the GO/STOP pair.
+- Do not click other gear-like icons elsewhere in the toolbar or inside the
+  Client Preferences dialog. Use nearby controls and tooltips to confirm that
+  the hovered icon is the client preferences/settings control.
+- Data Recording is not required for client-preferences navigation. Do not
+  start or stop Data Recording for tests that only inspect Client Preferences.
+- The dialog contains a proprietary navigation tree on the left and a settings
+  area for the selected node on the right.
+- When the dialog opens, the first/root node is normally selected. In German
+  this node is 'Allgemein' and the selected row is highlighted in blue.
+- Selecting a node in the left tree changes the settings area on the right.
+  Validate both the selected tree text and that the right settings area changes
+  to a plausible page for that selected node.
+- Tree nodes with a small plus symbol can be expanded. Expand such a node by
+  double-clicking the node name, not by clicking random empty tree space.
+- Nodes without a plus symbol are leaf nodes and should be selected with a
+  normal click.
+- The node 'Kreisansicht' / 'Circle View' / '圆视图' is normally collapsed when
+  the dialog opens. Expand it before selecting its child 'Ansicht' / 'Visuals'
+  / '显示'.
+- Multiple nodes can contain similar words, for example 'Ansicht' also appears
+  inside names like 'FFT-Ansicht'. Use hierarchy and the parent node to avoid
+  selecting the wrong entry.
+- Close the dialog with 'Abbrechen' / 'Cancel' or the equivalent cancel button
+  after validation. Use 'OK' only if the test explicitly requires accepting a
+  settings change.
+"""
+
+
+IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT = (
+    IBAPDA_BASE_CONTEXT
+    + IBAPDA_CLIENT_PREFERENCES_TREE_CONTEXT
+    + """
+TF-03 project and goal:
+- TF-03 validates text-based identification in the Client Preferences dialog.
+- The test is independent from the currently loaded project/layout.
+- The same navigation flow is validated in German, English, and Chinese.
+- Language changes are performed through the application menu path
+  View/Ansicht -> Language/Sprache -> target language, depending on the
+  currently active UI language.
+- After changing the language, ibaPDA may show a confirmation dialog and may
+  restart or require waiting until the UI is available again. Confirm only
+  clear language-change/restart prompts and wait for the main window to return.
+
+Language and translation rules:
+- When validating translated UI labels or menu entries, do not require an exact
+  literal word-by-word match if the visible text is semantically and
+  contextually correct.
+- Minor wording differences, shortened labels, industry-specific terminology,
+  or localized synonyms are acceptable if the intended meaning is preserved.
+- For Chinese labels, small glyphs and OCR artifacts are expected. Use the
+  visible tree position, icon, hierarchy, selection highlight, and right-side
+  settings page as supporting evidence.
+- A selected tree node is visually highlighted in blue. Use this highlight as
+  evidence that the intended node was selected.
+
+TF-03 language-specific target labels:
+- German run:
+  - Menu path: Ansicht -> Sprache -> Deutsch
+  - Dialog title: Client-Voreinstellungen
+  - Root/general node: Allgemein
+  - Text display node: Digitale Textanzeige
+  - Nested tree path: Kreisansicht -> Ansicht
+  - Dialog buttons: OK, Abbrechen
+- English run:
+  - Menu path: View -> Language -> English
+  - Dialog title: Client Preferences or equivalent client preferences title
+  - Root/general node: General
+  - Text display node: Text digital display
+  - Nested tree path: Circle View -> Visuals
+  - Dialog buttons: OK, Cancel
+- Chinese run:
+  - Menu path: the localized View/Language menu to select Chinese
+  - Root/general node: 概 览
+  - Text display node: 文本数 显
+  - Nested tree path: 圆视图 -> 显示
+  - Dialog buttons: localized OK and cancel buttons
+
+Validation scope:
+- For each language, open Client Preferences, identify the left navigation tree,
+  select the root/general node, select the text digital display node, expand
+  the circle-view node, select its visuals/view child, and record checkpoints.
+- For every selected node, verify the visible selected text and that the
+  right-side settings area is present and plausible for the selected category.
+- Do not edit settings, change numeric values, toggle checkboxes, reset client
+  settings, or change project/layout configuration.
+- If a required language, menu item, dialog, node, or settings area cannot be
+  identified clearly, terminate with failure.
+"""
+)
+
+
 IBAPDA_PROJECT_OPEN_CONTEXT = """
 Project opening workflow for later test cases:
 - To load another project, use the menu bar path Datei -> Projekt öffnen.

@@ -5,6 +5,7 @@ from ui_contexts import (
     IBAPDA_PROJECT_OPEN_CONTEXT,
     IBAPDA_TF_01_LAYOUT_CONTEXT,
     IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT,
+    IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT,
     IBAPDA_UI_CONTEXT,
 )
 
@@ -83,6 +84,28 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("can already be\n  invisible at the beginning", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
         self.assertIn("click 'visible' once", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
         self.assertIn("clicking an empty area of the QPanel/display area", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+
+    def test_tf_03_context_describes_client_preferences_language_tree(self):
+        context = IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
+
+        self.assertIn("Client Preferences dialog", context)
+        self.assertIn("right of the Data Recording STOP", context)
+        self.assertIn("Data Recording is not required", context)
+        self.assertIn("proprietary navigation tree", context)
+        self.assertIn("highlighted in blue", context)
+        self.assertIn("small plus symbol", context)
+        self.assertIn("double-clicking the node name", context)
+        self.assertIn("Allgemein", context)
+        self.assertIn("Digitale Textanzeige", context)
+        self.assertIn("Kreisansicht -> Ansicht", context)
+        self.assertIn("General", context)
+        self.assertIn("Text digital display", context)
+        self.assertIn("Circle View -> Visuals", context)
+        self.assertIn("概 览", context)
+        self.assertIn("文本数 显", context)
+        self.assertIn("圆视图 -> 显示", context)
+        self.assertIn("semantically", context)
+        self.assertIn("Do not edit settings", context)
 
     def test_project_open_context_is_available_for_later_tests(self):
         self.assertIn("Datei -> Projekt öffnen", IBAPDA_PROJECT_OPEN_CONTEXT)
