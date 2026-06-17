@@ -188,6 +188,99 @@ Safety boundaries:
 """
 
 
+IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT = IBAPDA_BASE_CONTEXT + IBAPDA_DATA_RECORDING_SHARED_CONTEXT + """
+TF-02 project and goal:
+- The relevant project is named 'test_layout_dynamic' in the ibaPDA title bar.
+  In some documentation it may also be referred to as 'test_layout_dynamisch'.
+- TF-02 validates several visually similar gray rectangular digital text labels
+  in the QPanel/display area.
+- The labels use green text while Data Recording is active. If Data Recording is
+  stopped, the dynamic text may be empty and only the gray label background may
+  remain visible.
+
+TF-02 layout structure:
+- The QPanel/display area has a mostly white background with a green heading
+  'label dynamic' near the upper left.
+- There are four relevant gray rectangular dynamic labels arranged in three
+  rows. They are structurally and visually similar, so identify them by row,
+  content type, and neighboring controls.
+- First row: one numeric label on the left and one text label to its right.
+- Second row: one numeric label on the left, with two buttons labeled 'visible'
+  and 'invisible' to its right. These buttons control the visibility of that
+  entire second-row numeric label element, including the gray rectangle and its
+  dynamic text.
+- Third row: one text label on the left, with two buttons labeled 'active' and
+  'inactive' to its right. These buttons control the interactivity/enabled state
+  of that third-row text label.
+- Numeric labels show changing decimal values, for example '430.45' or values
+  with a comma decimal separator.
+- Text labels show text beginning with 'FreeText' followed by a changing suffix,
+  for example 'FreeTextX'.
+
+Dynamic content validation:
+- Identify all four relevant dynamic labels and assign them to their positions:
+  first-row numeric, first-row text, second-row numeric controlled by
+  visible/invisible, and third-row text controlled by active/inactive.
+- The second-row numeric label controlled by visible/invisible can already be
+  invisible at the beginning of the test. If the layout shows too few labels or
+  the second-row numeric label cannot be found, click 'visible' once before
+  concluding that the label is missing.
+- To validate dynamic content, observe the labels, wait briefly, then observe
+  them again.
+- The two numeric labels should show the same current DynVal signal value, or
+  clearly equivalent current values if the value updates between observations.
+- The two text labels should show FreeText-based values following the same
+  LabelText update pattern.
+- Use checkpoint actions to record observed label positions, visible values, and
+  state changes.
+
+Visibility validation:
+- Use the 'invisible' button beside the second-row numeric label to hide that
+  entire label element.
+- Verify visually that the entire second-row numeric label disappears, including
+  its gray rectangular background and its dynamic value text.
+- Use the 'visible' button to show the second-row numeric label again.
+- Verify that the second-row numeric label can be identified again and displays
+  a valid dynamic numeric value.
+
+Interactivity validation:
+- Use the 'inactive' button beside the third-row text label to disable that
+  text label.
+- Verify that a right-click on the third-row text label does not open the
+  expected context menu.
+- Use the 'active' button to enable that third-row text label again.
+- Verify that a right-click on the third-row text label opens a context menu
+  containing an item such as 'Eigenschaften' or another clearly label-related
+  context menu entry.
+- Close any opened context menu after validation without changing properties by
+  clicking an empty area of the QPanel/display area next to the labels.
+
+Safety boundaries:
+- Do not edit projects, signals, label properties, QPanel objects, or
+  measurement configuration.
+- The TF-02 project is expected to be loaded before the test starts. Do not open
+  another project during TF-02.
+- Interact only with Data Recording controls, the four relevant dynamic labels,
+  and the visible/invisible/active/inactive buttons required for TF-02.
+- If the TF-02 project, the dynamic label layout, required buttons, or Data
+  Recording controls cannot be identified clearly, terminate with failure.
+"""
+
+
+IBAPDA_PROJECT_OPEN_CONTEXT = """
+Project opening workflow for later test cases:
+- To load another project, use the menu bar path Datei -> Projekt öffnen.
+- In the project-open dialog, select the intended project row in the table and
+  confirm with the 'Öffnen' button.
+- If Data Recording is running while opening another project, ibaPDA may show an
+  additional confirmation dialog. Confirm it with 'Yes' only if it clearly asks
+  to continue opening the selected project.
+- After selecting the project, another dialog may ask how to load initial values.
+  Click the 'Initialwerte laden' button to continue loading the project.
+- Wait until the selected project is loaded before validating its layout.
+"""
+
+
 IBAPDA_DATA_RECORDING_CONTEXT = (
     IBAPDA_BASE_CONTEXT
     + IBAPDA_DATA_RECORDING_SHARED_CONTEXT

@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from ui_contexts import IBAPDA_UI_CONTEXT
 from ui_contexts import IBAPDA_TF_01_LAYOUT_CONTEXT
+from ui_contexts import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
 from ui_tests.run_test_case import default_report_dir_for_case, load_test_case, run_test_case
 from ui_tests.test_cases import UiTestCase
 
@@ -33,6 +34,28 @@ class TestCaseDefinitionTests(unittest.TestCase):
         self.assertIn("one successful validation in Layout_1 is sufficient", case.task)
         self.assertIn("checkpoint", case.allowed_actions)
         self.assertIn("scroll", case.allowed_actions)
+
+    def test_tf_02_defines_dynamic_label_configuration(self):
+        case = load_test_case("TF-02")
+
+        self.assertEqual(case.case_id, "TF-02")
+        self.assertEqual(case.additional_system_prompt, IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("test_layout_dynamic", case.task)
+        self.assertIn("expected to be loaded before this test starts", case.task)
+        self.assertIn("Do not open or switch projects", case.task)
+        self.assertNotIn("Datei -> Projekt öffnen", case.task)
+        self.assertNotIn("Initialwerte laden", case.task)
+        self.assertIn("FreeText", case.task)
+        self.assertIn("visible", case.task)
+        self.assertIn("invisible", case.task)
+        self.assertIn("entire gray label element", case.task)
+        self.assertIn("click 'visible' once", case.task)
+        self.assertIn("empty area of the QPanel/display area", case.task)
+        self.assertIn("active", case.task)
+        self.assertIn("inactive", case.task)
+        self.assertIn("right_click", case.allowed_actions)
+        self.assertIn("terminate", case.allowed_actions)
+        self.assertNotIn("answer", case.allowed_actions)
 
 
 class TestCaseRunnerTests(unittest.TestCase):

@@ -2,7 +2,9 @@ import unittest
 
 from ui_contexts import (
     IBAPDA_BASE_CONTEXT,
+    IBAPDA_PROJECT_OPEN_CONTEXT,
     IBAPDA_TF_01_LAYOUT_CONTEXT,
+    IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT,
     IBAPDA_UI_CONTEXT,
 )
 
@@ -64,6 +66,29 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("proprietary navigation/tree", IBAPDA_TF_01_LAYOUT_CONTEXT)
         self.assertIn("Do not confuse", IBAPDA_TF_01_LAYOUT_CONTEXT)
         self.assertIn("QPanel/display area", IBAPDA_TF_01_LAYOUT_CONTEXT)
+
+    def test_tf_02_context_describes_dynamic_labels_and_state_controls(self):
+        self.assertIn("test_layout_dynamic", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("test_layout_dynamisch", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("FreeText", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("visible", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("invisible", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("active", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("inactive", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("expected to be loaded before the test starts", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("Do not open\n  another project during TF-02", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertNotIn("Initialwerte laden", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("right-click", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("entire second-row numeric label element", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("can already be\n  invisible at the beginning", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("click 'visible' once", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+        self.assertIn("clicking an empty area of the QPanel/display area", IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT)
+
+    def test_project_open_context_is_available_for_later_tests(self):
+        self.assertIn("Datei -> Projekt öffnen", IBAPDA_PROJECT_OPEN_CONTEXT)
+        self.assertIn("Öffnen", IBAPDA_PROJECT_OPEN_CONTEXT)
+        self.assertIn("Initialwerte laden", IBAPDA_PROJECT_OPEN_CONTEXT)
+        self.assertIn("Yes", IBAPDA_PROJECT_OPEN_CONTEXT)
 
 
 if __name__ == "__main__":
