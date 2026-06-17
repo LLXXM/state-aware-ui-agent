@@ -5,6 +5,7 @@ Autonomous agent that captures screenshots, analyzes with Qwen3.5 via Ollama, an
 import time
 import json
 import logging
+import copy
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 from datetime import datetime
@@ -167,13 +168,26 @@ class SeeThinkActAgent:
         """Prepare tool definitions for Ollama"""
         # Convert ComputerUse function to Ollama tool format
         computer_function = self.computer_use.function
+        parameters = copy.deepcopy(computer_function["parameters"])
+        if self.allowed_actions is not None:
+            action_schema = parameters["properties"]["action"]
+            action_schema["enum"] = [
+                action
+                for action in action_schema.get("enum", [])
+                if action in self.allowed_actions
+            ]
+            allowed_list = ", ".join(action_schema["enum"])
+            action_schema["description"] = (
+                f"{action_schema.get('description', '').rstrip()}\n\n"
+                f"For this task, only these actions are allowed: {allowed_list}."
+            )
         
         tool = {
             "type": "function",
             "function": {
                 "name": computer_function["name"],
                 "description": computer_function["description"],
-                "parameters": computer_function["parameters"]
+                "parameters": parameters
             }
         }
         
@@ -533,6 +547,8 @@ class SeeThinkActAgent:
         # Parse the action from response
         self.last_tool_call = None
         self.last_action_record = None
+        self.last_action_overlay = None
+        self.last_mouse_verification = None
         action_intent = self._extract_action_intent(response)
         action = self.ollama_client.parse_computer_use_action(response)
         self.last_tool_call = action
@@ -704,9 +720,7 @@ class SeeThinkActAgent:
                 datetime.now().isoformat(timespec="seconds"),
             ),
             "screenshot_path": getattr(self, 'current_screenshot_path', None),
-            "overlay_path": (
-                action_record or {}
-            ).get("overlay_path") or getattr(self, 'last_action_overlay', None),
+            "overlay_path": (action_record or {}).get("overlay_path"),
             "user_prompt": getattr(self, 'last_user_prompt', None),
             "system_prompt": getattr(self, 'last_system_prompt', None),
             "response": response,

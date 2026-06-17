@@ -43,12 +43,22 @@ class HtmlRunReportTests(unittest.TestCase):
                     "outcome": "executed",
                 },
             })
-            report.finish({"status": "success"})
+            report.finish({
+                "success": True,
+                "status": "success",
+                "iterations": 1,
+                "elapsed_time": 12.3456,
+            })
 
             html = report.report_path.read_text(encoding="utf-8")
             self.assertIn("Run TF-00", html)
             self.assertIn("Iteration 1", html)
-            self.assertIn("2026-06-16T18:30:00", html)
+            self.assertIn("2026-06-16 18:30:00", html)
+            self.assertNotIn("2026-06-16T18:30:00", html)
+            self.assertIn("Total time", html)
+            self.assertIn("12.35 s", html)
+            self.assertIn("Iterations", html)
+            self.assertIn("Success", html)
             self.assertIn("I will double-click the ibaPDA icon.", html)
             self.assertIn("Open ibaPDA Client from the desktop shortcut.", html)
             self.assertIn("computer_use", html)

@@ -61,6 +61,54 @@ class HtmlRunReport:
     def _text(value: Any) -> str:
         return html.escape("" if value is None else str(value))
 
+    @staticmethod
+    def _format_timestamp(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, datetime):
+            return value.isoformat(timespec="seconds").replace("T", " ")
+        return str(value).replace("T", " ")
+
+    @staticmethod
+    def _format_duration(value: Any) -> str:
+        try:
+            return f"{float(value):.2f} s"
+        except (TypeError, ValueError):
+            return ""
+
+    def _summary_items(self) -> list[tuple[str, str]]:
+        result = self.result or {}
+        status = result.get("status", "in progress")
+        success = result.get("success")
+        success_text = "in progress" if success is None else str(bool(success))
+        elapsed = self._format_duration(result.get("elapsed_time"))
+        finished = (
+            self._format_timestamp(self.finished_at)
+            if self.finished_at is not None
+            else "Run in progress"
+        )
+        return [
+            ("Status", str(status)),
+            ("Success", success_text),
+            ("Iterations", str(result.get("iterations", len(self.iterations)))),
+            ("Total time", elapsed or "Run in progress"),
+            ("Started", self._format_timestamp(self.started_at)),
+            ("Finished", finished),
+            ("Report file", self.report_path.name),
+        ]
+
+    def _render_summary(self) -> str:
+        items = "\n".join(
+            f"""
+            <div class="summary-item">
+              <div class="summary-label">{self._text(label)}</div>
+              <div class="summary-value">{self._text(value)}</div>
+            </div>
+            """
+            for label, value in self._summary_items()
+        )
+        return f"""<section class="summary-grid" aria-label="Run summary">{items}</section>"""
+
     def _render_image(self, label: str, path_value: Any) -> str:
         href = self._artifact_href(path_value)
         if href is None:
@@ -89,7 +137,7 @@ class HtmlRunReport:
         return f"""
         <section class="iteration">
           <h2>Iteration {self._text(record.get("iteration"))}</h2>
-          <div class="timestamp">Started: {self._text(record.get("timestamp"))}</div>
+          <div class="timestamp">Started: {self._text(self._format_timestamp(record.get("timestamp")))}</div>
           <div class="grid">
             <div>
               <h3>Screenshot</h3>
@@ -128,7 +176,7 @@ class HtmlRunReport:
         result = self._json_block(self.result) if self.result is not None else "Run in progress"
         metadata = self._json_block(self.metadata)
         finished = (
-            self.finished_at.isoformat(timespec="seconds")
+            self._format_timestamp(self.finished_at)
             if self.finished_at is not None
             else "Run in progress"
         )
@@ -149,6 +197,10 @@ class HtmlRunReport:
     pre {{ white-space: pre-wrap; overflow-wrap: anywhere; background: #f1f3f5; padding: 12px; border-radius: 4px; }}
     code {{ overflow-wrap: anywhere; }}
     .timestamp {{ color: #52606d; margin: -6px 0 12px; }}
+    .summary-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }}
+    .summary-item {{ border: 1px solid #d9dde3; border-radius: 6px; padding: 12px; background: #fbfcfd; }}
+    .summary-label {{ color: #52606d; font-size: 12px; text-transform: uppercase; }}
+    .summary-value {{ font-size: 18px; font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }}
     figcaption {{ margin-bottom: 8px; color: #3f4854; }}
     @media (max-width: 850px) {{ .grid {{ grid-template-columns: 1fr; }} }}
   </style>
@@ -156,10 +208,11 @@ class HtmlRunReport:
 <body>
   <header>
     <h1>{self._text(self.title)}</h1>
-    <div>Started: {self._text(self.started_at.isoformat(timespec="seconds"))}</div>
+    <div>Started: {self._text(self._format_timestamp(self.started_at))}</div>
     <div>Finished: {self._text(finished)}</div>
   </header>
   <main>
+    {self._render_summary()}
     <section>
       <h2>Task</h2>
       <pre>{self._text(self.task)}</pre>

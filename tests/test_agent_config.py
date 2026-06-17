@@ -40,6 +40,23 @@ class AgentConfigTests(unittest.TestCase):
         self.assertIn("checkpoint", config.SYSTEM_PROMPT)
         self.assertIn("computer_use", config.SYSTEM_PROMPT)
 
+    def test_prepare_tools_filters_action_enum_to_allowed_actions(self):
+        agent = SeeThinkActAgent.__new__(SeeThinkActAgent)
+        from utils.agent_function_call import ComputerUse
+
+        agent.computer_use = ComputerUse()
+        agent.allowed_actions = {"checkpoint", "terminate"}
+
+        tools = agent._prepare_tools()
+
+        action_enum = tools[0]["function"]["parameters"]["properties"]["action"]["enum"]
+        self.assertEqual(action_enum, ["checkpoint", "terminate"])
+        self.assertNotIn("answer", action_enum)
+        self.assertIn(
+            "only these actions are allowed",
+            tools[0]["function"]["parameters"]["properties"]["action"]["description"],
+        )
+
     @patch("see_think_act_agent.ActionExecutor")
     @patch("see_think_act_agent.OllamaVisionClient")
     @patch("see_think_act_agent.ScreenshotCapture")

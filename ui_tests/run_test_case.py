@@ -35,7 +35,7 @@ def _not_required_result(message: str) -> dict[str, Any]:
 
 
 def default_report_dir_for_case(case: UiTestCase) -> str:
-    """Return a timestamped report directory next to the test case module."""
+    """Return a timestamped report directory grouped by test case module."""
     module_name = case.case_id.lower().replace("-", "_")
     try:
         module = importlib.import_module(f"ui_tests.test_cases.{module_name}")
@@ -43,7 +43,7 @@ def default_report_dir_for_case(case: UiTestCase) -> str:
     except ModuleNotFoundError:
         test_case_dir = Path(__file__).parent / "test_cases"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return str(test_case_dir / "Reports" / f"{module_name}_{timestamp}")
+    return str(test_case_dir / "Reports" / module_name / f"{module_name}_{timestamp}")
 
 
 def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[str, Any]:

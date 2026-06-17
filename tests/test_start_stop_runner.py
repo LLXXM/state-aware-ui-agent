@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from ui_contexts import IBAPDA_UI_CONTEXT
+from ui_contexts import IBAPDA_TF_01_LAYOUT_CONTEXT
 from ui_tests.run_test_case import default_report_dir_for_case, load_test_case, run_test_case
 from ui_tests.test_cases import UiTestCase
 
@@ -15,6 +16,23 @@ class TestCaseDefinitionTests(unittest.TestCase):
         self.assertGreaterEqual(case.max_executed_mouse_actions, 5)
         self.assertIn("Data Recording STOP", case.task)
         self.assertIn("center of the now-red filled Data Recording STOP", case.task)
+
+    def test_tf_01_defines_layout_hierarchy_configuration(self):
+        case = load_test_case("TF-01")
+
+        self.assertEqual(case.case_id, "TF-01")
+        self.assertEqual(case.additional_system_prompt, IBAPDA_TF_01_LAYOUT_CONTEXT)
+        self.assertIn("test_layout_tabs", case.task)
+        self.assertIn("double-clicking the visible Windows desktop shortcut", case.task)
+        self.assertIn("Do not use a single click", case.task)
+        self.assertIn("click only selects the shortcut", case.task)
+        self.assertIn("Layout_1", case.task)
+        self.assertIn("ABC - <number>", case.task)
+        self.assertIn("layout manager", case.task)
+        self.assertIn("Only if a layout switch was necessary", case.task)
+        self.assertIn("one successful validation in Layout_1 is sufficient", case.task)
+        self.assertIn("checkpoint", case.allowed_actions)
+        self.assertIn("scroll", case.allowed_actions)
 
 
 class TestCaseRunnerTests(unittest.TestCase):
@@ -61,7 +79,10 @@ class TestCaseRunnerTests(unittest.TestCase):
         self.assertEqual(kwargs["screenshot_dir"], "artifacts/ui_tests/tf_00")
         self.assertEqual(kwargs["verify_mouse_targets"], case.verify_mouse_targets)
         self.assertEqual(kwargs["save_action_overlays"], case.save_action_overlays)
-        self.assertIn("ui_tests\\test_cases\\Reports\\tf_00_", kwargs["report_dir"])
+        self.assertIn(
+            "ui_tests\\test_cases\\Reports\\tf_00\\tf_00_",
+            kwargs["report_dir"],
+        )
         minimize.assert_called_once_with()
         restore.assert_called_once_with()
         self.assertTrue(result["success"])
@@ -70,7 +91,7 @@ class TestCaseRunnerTests(unittest.TestCase):
     def test_default_report_dir_is_next_to_test_case_module(self):
         report_dir = default_report_dir_for_case(load_test_case("TF-00"))
 
-        self.assertIn("ui_tests\\test_cases\\Reports\\tf_00_", report_dir)
+        self.assertIn("ui_tests\\test_cases\\Reports\\tf_00\\tf_00_", report_dir)
 
     @patch("ui_tests.run_test_case.print")
     @patch("ui_tests.run_test_case.restore_minimized_windows_after_test")
@@ -110,7 +131,10 @@ class TestCaseRunnerTests(unittest.TestCase):
         self.assertEqual(kwargs["iteration_delay"], 0.1)
         self.assertEqual(kwargs["post_action_delay"], 0.2)
         self.assertEqual(kwargs["model_options"], {"temperature": 0})
-        self.assertIn("ui_tests\\test_cases\\Reports\\tf_01_", kwargs["report_dir"])
+        self.assertIn(
+            "ui_tests\\test_cases\\Reports\\tf_01\\tf_01_",
+            kwargs["report_dir"],
+        )
         minimize.assert_called_once_with()
         restore.assert_called_once_with()
         self.assertEqual(result["post_cleanup"]["status"], "not_required")
