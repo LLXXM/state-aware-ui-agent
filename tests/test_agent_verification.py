@@ -40,6 +40,16 @@ class AgentMouseVerificationTests(unittest.TestCase):
             "arguments": {"action": "left_click", "coordinate": [900, 20]},
         }
 
+    def _proposed_click_with_intent(self, intent):
+        return {
+            "name": "computer_use",
+            "arguments": {
+                "action": "left_click",
+                "coordinate": [900, 20],
+                "intent": intent,
+            },
+        }
+
     def _verification(self, decision, reason):
         return {
             "name": "verify_mouse_target",
@@ -118,15 +128,17 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     @patch("see_think_act_agent.time.sleep")
-    def test_verification_receives_planned_stop_target_intent(self, sleep):
+    def test_verification_prefers_tool_intent_for_planned_stop_target(self, sleep):
         self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click(),
+            self._proposed_click_with_intent(
+                "Click the center of the red STOP button."
+            ),
             self._verification("approve", "Crosshair is on STOP."),
         ]
         self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
         response = {
             "message": {
-                "thinking": "Data Store is active, so click the red STOP button."
+                "thinking": "Long planning text with broader workflow details."
             }
         }
 
@@ -136,7 +148,8 @@ class AgentMouseVerificationTests(unittest.TestCase):
         prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
             "user_query"
         ]
-        self.assertIn("click the red STOP button", prompt)
+        self.assertIn("Click the center of the red STOP button.", prompt)
+        self.assertNotIn("Long planning text", prompt)
         self.assertIn("do not choose a different next action", prompt)
 
     def test_dry_run_does_not_request_target_approval(self):

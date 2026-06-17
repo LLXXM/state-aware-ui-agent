@@ -23,3 +23,6 @@ artifacts/ui_tests/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Test case specific ignores
+ui_tests/test_cases/Reports/    

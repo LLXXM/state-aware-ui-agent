@@ -1,27 +1,52 @@
 """
-Ollama client for Qwen3-VL model with function calling support
+Ollama client for Qwen vision models with function calling support.
 """
-import ollama
 import json
 import base64
 from typing import List, Dict, Any, Optional
-from PIL import Image
 import io
+
+import ollama
+from PIL import Image
+
+import config
 
 
 class OllamaVisionClient:
-    """Client for interacting with Qwen3-VL via Ollama"""
+    """Client for interacting with Qwen vision models via Ollama."""
     
-    def __init__(self, model: str = "qwen3-vl:235b-cloud"):
+    def __init__(
+        self,
+        model: str = config.MODEL_NAME,
+        options: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize Ollama client
         
         Args:
-            model: Model name to use (default: qwen3-vl:235b-cloud)
+            model: Model name to use
+            options: Ollama generation options
         """
 
         self.model = model
+        self.options = dict(config.MODEL_OPTIONS if options is None else options)
         self.client = ollama
+
+    def _to_plain_data(self, value):
+        """Convert Ollama response objects to dict/list primitives."""
+        if hasattr(value, "model_dump"):
+            return self._to_plain_data(value.model_dump())
+        if isinstance(value, dict):
+            return {key: self._to_plain_data(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._to_plain_data(item) for item in value]
+        return value
+
+    def _print_connection_help(self) -> None:
+        """Print the command a user can try when Ollama/model setup fails."""
+        print("\nERROR: Failed to initialize Ollama client")
+        print("Make sure Ollama is running and the model is pulled or available:")
+        print(f"  ollama run {self.model}")
 
         
     def encode_image_to_base64(self, image: Image.Image, format: str = 'PNG') -> str:
@@ -60,7 +85,8 @@ class OllamaVisionClient:
             request_params = {
                 'model': self.model,
                 'messages': messages,
-                'stream': stream
+                'stream': stream,
+                'options': self.options,
             }
             
             # Add tools if provided
@@ -70,7 +96,7 @@ class OllamaVisionClient:
             # Make the request
             response = self.client.chat(**request_params)
             
-            return response
+            return self._to_plain_data(response)
             
         except Exception as e:
             print(f"Error in Ollama chat: {e}")
@@ -172,7 +198,7 @@ class OllamaVisionClient:
     
     def test_connection(self) -> bool:
         """
-        Test connection to Ollama and model availability
+        Test connection to Ollama and that the configured model can answer.
         
         Returns:
             True if connection successful, False otherwise
@@ -198,14 +224,33 @@ class OllamaVisionClient:
 
             if self.model in model_names or any(self.model in name for name in model_names):
                 print(f"OK: Model '{self.model}' is available")
-                return True
             else:
-                print(f"ERROR: Model '{self.model}' not found")
-                print(f"Available models: {model_names}")
-                return False
+                try:
+                    self.client.show(self.model)
+                    print(f"OK: Model '{self.model}' metadata is available")
+                except Exception:
+                    print(f"ERROR: Model '{self.model}' not found")
+                    print(f"Available models: {model_names}")
+                    self._print_connection_help()
+                    return False
+
+            self.client.chat(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Connection check. Reply with OK.",
+                    }
+                ],
+                stream=False,
+                options=self.options,
+            )
+            print(f"OK: Model '{self.model}' answered a chat request")
+            return True
 
         except Exception as e:
             print(f"ERROR: Could not connect to Ollama: {e}")
+            self._print_connection_help()
             return False
 
 
@@ -219,4 +264,4 @@ if __name__ == "__main__":
     else:
         print("\nERROR: Failed to initialize Ollama client")
         print("Make sure Ollama is running and the model is pulled:")
-        print("  ollama run qwen3-vl:235b-cloud")
+        print(f"  ollama run {client.model}")

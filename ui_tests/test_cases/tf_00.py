@@ -17,7 +17,10 @@ Perform test case TF-00, the controlled ibaPDA Data Recording cycle:
 6. Confirm that Data Recording has started: GO becomes gray, STOP becomes red,
    and/or a 'Data Store' entry with a small green circular indicator appears in
    'Datenaufzeichnungsstatus'.
-7. Click the now-red Data Recording STOP button directly to the right of GO.
+7. Click the center of the now-red filled Data Recording STOP button directly
+   to the right of GO. The click target must be inside the red circle containing
+   the white 'STOP' text, not on the gear/client preferences controls to its
+   right.
 8. If a dialog clearly asks to confirm stopping Data Recording, confirm it.
 9. Terminate with status success only after the UI visibly confirms Data
    Recording is stopped again: GO is green, STOP is gray, and/or
@@ -41,5 +44,14 @@ CASE = UiTestCase(
     description="Start and stop ibaPDA Data Recording and leave the client closed.",
     task=TASK,
     additional_system_prompt=IBAPDA_UI_CONTEXT,
-    max_executed_mouse_actions=5,
+    max_executed_mouse_actions=10,
+
+    verify_mouse_targets=True,     # True
+    iteration_delay=0.1,            # 0.5
+    post_action_delay=1.0,          # 1.0  
+    model_options={
+        "temperature": 0.1,
+        "num_ctx": 8192,          # 32768,
+        "num_predict": 256,       #512, 
+    }
 )

@@ -38,7 +38,9 @@ class AgentPromptTests(unittest.TestCase):
         self.agent.iteration_count = 2
         self.agent.action_history = [{
             "iteration": 1,
+            "timestamp": "2026-06-16T18:30:00",
             "arguments": {"action": "left_click", "coordinate": [100, 200]},
+            "intent": "Click the GO button to start recording.",
             "outcome": "executed",
         }]
 
@@ -47,6 +49,8 @@ class AgentPromptTests(unittest.TestCase):
         prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs["user_query"]
         self.assertIn("Execution history from this task", prompt)
         self.assertIn('"action": "left_click"', prompt)
+        self.assertIn("2026-06-16T18:30:00", prompt)
+        self.assertIn("Click the GO button to start recording.", prompt)
         self.assertIn("executed", prompt)
         self.assertIn("do not repeat successful steps", prompt)
 
@@ -56,6 +60,7 @@ class AgentPromptTests(unittest.TestCase):
         self.assertIn("entire user task", system_prompt)
         self.assertIn("intermediate visual check", system_prompt)
         self.assertIn("checkpoint", system_prompt)
+        self.assertIn("intent", system_prompt)
 
     def test_additional_system_prompt_is_sent_separately_from_general_source(self):
         self.agent.iteration_count = 1

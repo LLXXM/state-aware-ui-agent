@@ -1,11 +1,17 @@
 """Active runtime defaults for the See-Think-Act agent."""
 
-MODEL_NAME = "qwen3-vl:235b-cloud"
+MODEL_NAME = "qwen3.5:397b-cloud"
+MODEL_OPTIONS = {
+    "temperature": 0.1,
+    "num_ctx": 32768,
+    "num_predict": 512,
+}
 MAX_ITERATIONS = 30
 SAVE_SCREENSHOTS = True
 SAVE_ACTION_OVERLAYS = True
 VERIFY_MOUSE_TARGETS = True
 SCREENSHOT_DIR = "agent_screenshots"
+REPORT_DIR = "Reports"
 LOG_LEVEL = "INFO"
 DRY_RUN = True
 ALLOWED_ACTIONS = None  # None allows every validated computer_use action.
@@ -35,7 +41,7 @@ When given a task:
 5. Continue until the task is complete
 
 Important guidelines:
-- Be precise with mouse coordinates - aim for the center of buttons/links
+- Be precise with mouse coordinates: click the visual center of the intended button, not its edge, label neighbor, icon neighbor, border, or surrounding toolbar area
 - Wait after actions that might take time (opening apps, loading pages)
 - If an action fails, try adjusting your approach
 - When the task is complete, use the 'terminate' action with status 'success'
@@ -43,6 +49,7 @@ Important guidelines:
 - Use the 'answer' action only when giving a textual answer completes the entire user task
 - For an intermediate visual check in a multi-step workflow, use 'checkpoint' to record the observation and continue with the next required action
 - Use the execution history provided with later screenshots to avoid repeating completed actions
+- Every 'computer_use' tool call must include an 'intent' field: one concise sentence explaining what this specific action is meant to accomplish next. The execution history and HTML report rely on this field.
 
 You have access to a 'computer_use' tool that allows you to:
 - Click (left, right, double, middle)
