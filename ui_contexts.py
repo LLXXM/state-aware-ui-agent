@@ -148,7 +148,8 @@ Data Recording states:
 - After a successful GO click, ibaPDA shows a confirmation/progress dialog or
   window for starting Data Recording, often titled 'Erfassung wird gestartet'.
   This dialog may need confirmation if a clear confirmation control is visible,
-  but it can also close by itself after a few seconds.
+  but it can also close by itself after a few seconds. The dialog should appear
+  within about 3 seconds after the GO click if the click was accepted.
 - If Data Recording is already running, do not click GO again. Treat active
   recording as the required condition.
 
@@ -163,6 +164,10 @@ Confirmation dialogs:
 - After clicking GO or STOP, a confirmation dialog or window may appear.
 - A window titled 'Erfassung wird gestartet' means that the GO action has
   already initiated the start procedure; it is not evidence that GO failed.
+- If no start dialog appears within about 3 seconds and Data Recording does not
+  become active, treat the GO click as not clearly accepted and choose a
+  corrected next action based on the current screenshot. Do not repeat the exact
+  same GO click coordinates with the same intent.
 - If the 'Erfassung wird gestartet' dialog disappears by itself and the UI then
   shows active Data Recording, continue the test without clicking GO again.
 - Interact with a dialog only when its purpose is clearly to confirm the Data
@@ -671,6 +676,72 @@ Safety boundaries:
 - If project reload, empty QPanel, design mode, the tool pane, a required tool,
   a property dialog, a signal dropdown, or Data Recording controls cannot be
   identified clearly, terminate with failure.
+"""
+)
+
+
+IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT = (
+    IBAPDA_BASE_CONTEXT
+    + IBAPDA_DATA_RECORDING_SHARED_CONTEXT
+    + """
+TF-06 project and goal:
+- The relevant project is named 'test_layout_multistatelabel'.
+- TF-06 validates semantic consistency between a trend curve and a
+  multistatelabel in the QPanel/display area.
+- Both visualization elements are driven by the same dynamic triangle signal
+  with a value range from -100 to 100.
+- This is a runtime validation test. Do not edit the project, do not enter
+  design mode, do not open property dialogs, and do not change signal
+  assignments.
+
+Relevant visualization elements:
+- The trend curve is the large black chart in the QPanel/display area. It has a
+  grid, time labels on the x-axis, a blue signal trace, blue y-axis labels from
+  about -100 to 100 on the right side, and a small toolbar above the chart.
+- The signal trace should look like a triangle signal: it rises and falls
+  approximately linearly between negative and positive values.
+- The multistatelabel is a rectangular colored label below the trend curve. It
+  changes both text and background color based on the current signal state.
+- In the positive state, the multistatelabel shows the text 'Wert > 0' on a
+  green background.
+- In the negative state, the multistatelabel shows the text 'Wert < 0' on a red
+  background.
+
+Semantic consistency rules:
+- If the current signal state in the trend curve is positive, the
+  multistatelabel must show 'Wert > 0' and must have a green background.
+- If the current signal state in the trend curve is negative, the
+  multistatelabel must show 'Wert < 0' and must have a red background.
+- Validate the signal state, label text, and label background color from the
+  same full-screen observation whenever possible. Do not zoom into only one
+  element in a way that separates the label state from the trend state in time.
+- A state is stable enough for validation when the label text and background
+  color remain consistent across two observations separated by a short wait.
+- Because the signal changes continuously, the trend curve may update while the
+  screenshot is being interpreted. Use repeated observations and checkpoints
+  instead of judging a transient border-crossing frame as failure.
+- The positive and negative states must both be observed at least once before
+  TF-06 can succeed.
+
+Runtime validation:
+- Data Recording must be active for the dynamic trend curve and multistatelabel
+  to update. If Data Recording is stopped, start it using the shared Data
+  Recording GO instructions.
+- If Data Recording is active but the label is near a transition or the trend
+  state is ambiguous, wait briefly and observe again.
+- Use checkpoint actions to record each validated state. Each checkpoint should
+  mention the observed trend state, label text, label background color, and
+  whether the consistency rule was satisfied.
+
+Safety boundaries:
+- Do not open or switch projects during TF-06. The project is expected to be
+  loaded when ibaPDA starts.
+- Do not enter design mode, move visualization elements, modify labels, modify
+  the trend curve, or save project changes.
+- Do not use answer for completion; terminate with status success or failure.
+- If the project, trend curve, multistatelabel, Data Recording controls, or one
+  of the two semantic states cannot be identified clearly, terminate with
+  failure and explain the missing or inconsistent observation.
 """
 )
 

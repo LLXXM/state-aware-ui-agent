@@ -436,6 +436,9 @@ class SeeThinkActAgent:
             "\n\nExecution history from this task:\n"
             + "\n".join(history_lines)
             + "\nUse the current screenshot to verify effects and do not repeat successful steps unnecessarily."
+            + "\nIf a mouse action was blocked as repetition, do not retry the exact same action "
+            "with the exact same coordinate and intent after only waiting; adjust the target "
+            "or choose a different action based on the current screenshot."
         )
 
     def _record_action(
@@ -501,6 +504,41 @@ class SeeThinkActAgent:
             previous_matches += 1
 
         return previous_matches >= max_repeats
+
+    def _would_repeat_same_mouse_target_after_wait(self, arguments: Dict[str, Any]) -> Optional[str]:
+        """Detect an unchanged mouse target retried after only passive observations."""
+        if arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+            return None
+
+        coordinate = arguments.get('coordinate')
+        intent = self._action_intent_from_arguments(arguments)
+        if coordinate is None or intent is None:
+            return None
+
+        passive_actions = {'wait', 'checkpoint'}
+        for entry in reversed(self.action_history):
+            previous = entry.get('arguments', {})
+            previous_action = previous.get('action')
+            if previous_action in passive_actions:
+                continue
+            if previous_action not in self.computer_use.MOUSE_ACTIONS:
+                return None
+
+            previous_intent = self._action_intent_from_arguments(previous)
+            if (
+                previous_action == arguments.get('action')
+                and previous.get('coordinate') == coordinate
+                and previous_intent == intent
+            ):
+                return (
+                    "Same mouse action, same coordinate, and same intent were already "
+                    "attempted with only wait/checkpoint observations since then. "
+                    "Choose a slightly adjusted target or a different action based on "
+                    "the current screenshot instead of repeating it 1:1."
+                )
+            return None
+
+        return None
 
     def _has_too_many_failures(self) -> bool:
         """Detect consecutive failed executable actions."""
@@ -669,6 +707,17 @@ class SeeThinkActAgent:
             self._abort_task(
                 f"action repeated more than {self.max_repeated_actions} times: "
                 f"{arguments.get('action')}"
+            )
+            return False
+
+        mouse_repeat_reason = self._would_repeat_same_mouse_target_after_wait(arguments)
+        if mouse_repeat_reason:
+            self._record_action(
+                arguments,
+                'blocked_repetition',
+                overlay_path,
+                report_intent,
+                mouse_repeat_reason,
             )
             return False
 

@@ -7,6 +7,7 @@ from ui_contexts import (
     IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT,
     IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT,
     IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT,
+    IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT,
     IBAPDA_UI_CONTEXT,
 )
 
@@ -77,6 +78,8 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("system or computer name", IBAPDA_UI_CONTEXT)
         self.assertIn("Erfassung wird gestartet", IBAPDA_UI_CONTEXT)
         self.assertIn("close by itself after a few seconds", IBAPDA_UI_CONTEXT)
+        self.assertIn("within about 3 seconds", IBAPDA_UI_CONTEXT)
+        self.assertIn("Do not repeat the exact\n  same GO click coordinates", IBAPDA_UI_CONTEXT)
         self.assertIn("continue the test without clicking GO again", IBAPDA_UI_CONTEXT)
         self.assertIn("Do not click GO a second time", IBAPDA_UI_CONTEXT)
         self.assertIn("confirmation dialog", IBAPDA_UI_CONTEXT)
@@ -219,6 +222,27 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("Do not configure the trend curve through a property dialog", context)
         self.assertIn("Design mode must be exited", context)
         self.assertIn("Start Data Recording only after", context)
+
+    def test_tf_06_context_describes_semantic_state_validation(self):
+        context = IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT
+
+        self.assertIn("test_layout_multistatelabel", context)
+        self.assertIn("semantic consistency", context)
+        self.assertIn("triangle signal", context)
+        self.assertIn("value range from -100 to 100", context)
+        self.assertIn("Do not edit the project", context)
+        self.assertIn("large black chart", context)
+        self.assertIn("blue signal trace", context)
+        self.assertIn("multistatelabel", context)
+        self.assertIn("'Wert > 0'", context)
+        self.assertIn("green background", context)
+        self.assertIn("'Wert < 0'", context)
+        self.assertIn("red\n  background", context)
+        self.assertIn("same full-screen observation", context)
+        self.assertIn("both be observed at least once", context)
+        self.assertIn("checkpoint", context)
+        self.assertIn("Do not open or switch projects", context)
+        self.assertIn("Do not enter design mode", context)
 
 
 if __name__ == "__main__":

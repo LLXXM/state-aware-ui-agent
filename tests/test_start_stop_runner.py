@@ -6,6 +6,7 @@ from ui_contexts import IBAPDA_TF_01_LAYOUT_CONTEXT
 from ui_contexts import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
 from ui_contexts import IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
 from ui_contexts import IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT
+from ui_contexts import IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT
 from ui_tests.run_test_case import default_report_dir_for_case, load_test_case, run_test_case
 from ui_tests.test_cases import UiTestCase
 
@@ -173,6 +174,37 @@ class TestCaseDefinitionTests(unittest.TestCase):
         self.assertTrue(case.verify_mouse_targets)
         self.assertFalse(case.abort_on_mouse_verification_failure)
         self.assertGreaterEqual(case.max_iterations, 80)
+
+    def test_tf_06_defines_semantic_state_validation_workflow(self):
+        case = load_test_case("TF-06")
+
+        self.assertEqual(case.case_id, "TF-06")
+        self.assertEqual(
+            case.additional_system_prompt,
+            IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT,
+        )
+        self.assertIn("test_layout_multistatelabel", case.task)
+        self.assertIn("triangle signal", case.task)
+        self.assertIn("-100 to 100", case.task)
+        self.assertIn("trend curve", case.task)
+        self.assertIn("multistatelabel", case.task)
+        self.assertIn("'Wert > 0'", case.task)
+        self.assertIn("green background", case.task)
+        self.assertIn("'Wert < 0'", case.task)
+        self.assertIn("red background", case.task)
+        self.assertIn("same full-screen view", case.task)
+        self.assertIn("positive state", case.task)
+        self.assertIn("negative state", case.task)
+        self.assertIn("both semantic states", case.task)
+        self.assertIn("Do not open or switch projects", case.task)
+        self.assertIn("Do not enter design mode", case.task)
+        self.assertIn("checkpoint", case.allowed_actions)
+        self.assertIn("wait", case.allowed_actions)
+        self.assertIn("terminate", case.allowed_actions)
+        self.assertNotIn("answer", case.allowed_actions)
+        self.assertTrue(case.verify_mouse_targets)
+        self.assertFalse(case.abort_on_mouse_verification_failure)
+        self.assertGreaterEqual(case.max_iterations, 45)
 
 
 class TestCaseRunnerTests(unittest.TestCase):
