@@ -80,6 +80,7 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
         allowed_actions=set(case.allowed_actions),
         max_executed_mouse_actions=case.max_executed_mouse_actions,
         verify_mouse_targets=case.verify_mouse_targets,
+        abort_on_mouse_verification_failure=case.abort_on_mouse_verification_failure,
         save_action_overlays=case.save_action_overlays,
         model_options=case.model_options,
         report_dir=report_dir,

@@ -36,7 +36,9 @@ The action to perform. Available actions:
 * `mouse_move`: Move the cursor to `coordinate`.
 * `left_click` or `click`, `right_click`, `middle_click`: Click at `coordinate`.
 * `double_click`, `triple_click`: Click multiple times at `coordinate`.
-* `left_click_drag`: Drag the cursor to `coordinate`.
+* `left_click_drag`: Drag from the current mouse position to the absolute target
+  position given by `coordinate` on the normalized screen. It is not a relative
+  offset.
 * `scroll`: Perform vertical scrolling using `pixels`.
 * `hscroll`: Perform horizontal scrolling using `pixels`.
 * `wait`: Wait for `time` seconds.
@@ -82,7 +84,11 @@ The action to perform. Available actions:
                 "type": "string",
             },
             "coordinate": {
-                "description": "A normalized [x, y] position on a 0-1000 scale, required for mouse actions.",
+                "description": (
+                    "A normalized absolute [x, y] position on a 0-1000 screen scale, "
+                    "required for mouse actions. For left_click_drag this is the absolute "
+                    "drag target position, not a relative offset from the current pointer."
+                ),
                 "items": {"type": "number", "minimum": 0, "maximum": 1000},
                 "maxItems": 2,
                 "minItems": 2,

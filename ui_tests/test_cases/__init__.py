@@ -23,6 +23,9 @@ class UiTestCase:
     max_consecutive_failures: int = 2
     max_executed_mouse_actions: Optional[int] = None
     verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS
+    abort_on_mouse_verification_failure: bool = (
+        config.ABORT_ON_MOUSE_VERIFICATION_FAILURE
+    )
     save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS
     iteration_delay: float = config.ITERATION_DELAY
     post_action_delay: float = config.POST_ACTION_DELAY

@@ -6,6 +6,9 @@ Starting ibaPDA Client:
 - The Windows desktop shortcut named 'ibaPDA Client' opens the application.
 - Start the application by double-clicking the 'ibaPDA Client' desktop shortcut.
   A single left click only selects the shortcut and does not open the client.
+- If an ibaPDA loading screen or splash screen appears after the double-click,
+  treat the desktop shortcut launch as successful. Do not double-click the
+  shortcut again; wait until the main window is available, for up to 1 minute.
 - Wait for the main window to be visibly loaded before selecting controls in
   the application toolbar.
 
@@ -19,6 +22,67 @@ Main ibaPDA workspace:
 - When validating visualization elements, inspect the QPanel/display area rather
   than the signal tree, event log, or bottom status panes.
 
+Proprietary navigation and selection trees:
+- ibaPDA often uses proprietary tree controls in dialogs, dropdowns, tool panes,
+  layout selectors, and signal selectors. These trees may not behave like
+  standard HTML or file-system trees.
+- Tree entries are selected by clicking the visible text or row of the entry.
+  A selected entry is often highlighted, commonly with a blue selection
+  background.
+- When clicking, double-clicking, or starting a drag from a tree entry, target
+  the vertical center of the visible node text or row. Avoid the upper/lower
+  edge of the row, tiny icons, and empty spacing.
+- To verify that the intended node text/row was targeted, you may first click
+  the node text/row once and check whether that exact row becomes highlighted
+  blue. Use that as selection evidence, not as proof of expansion.
+- During mouse-target verification, a blue-highlighted tree row may still be
+  the row selected by a previous click. Do not treat an old blue highlight as
+  proof that the new red marker target is wrong. Judge whether the marker center
+  is on the intended current node text/row.
+- This also applies when verifying left-clicks or double-clicks on tree node
+  text such as 'Virtuell': approve a correctly centered marker on the intended
+  node text even if another row is still blue-highlighted from the previous
+  selection.
+- Nodes with a small plus symbol or collapsed branch indicator can be expanded.
+  Prefer expanding by double-clicking the visible node text. Use the plus symbol
+  only if the correct plus for that exact node row is clearly visible and
+  targetable.
+- When expanding a tree node, target either the plus symbol itself or the
+  visible node text. Use a normal single click only on the plus symbol; use a
+  double-click on the node text. Do not single-click the node text when the goal
+  is to expand it, and do not click in the empty gap between the plus symbol and
+  the node name; this may select nothing and leave the tree collapsed.
+- Plus symbols are indented with their tree level. Do not assume all plus
+  symbols are in one vertical column. For child nodes, the plus symbol is
+  shifted to the right compared with its parent. If the correct plus position is
+  uncertain, use a double-click on the visible node text instead.
+- If expansion by double-clicking the node text does not work on the first
+  attempt, try the same double-click once more with the pointer shifted
+  vertically by no more than 5 pixels, while still staying within the vertical
+  center band of the same node text/row.
+- Some tree rows contain a small icon between the plus symbol and the node text.
+  Do not confuse that icon with the plus symbol. The true plus symbol is the
+  expand/collapse control at the far left of the tree row; if unsure, use a
+  double-click on the vertical center of the visible node text instead.
+- Nodes with a minus symbol or expanded branch indicator are already expanded.
+  Do not collapse them unless the current task explicitly requires it.
+- Treat a node as successfully expanded only when new indented child nodes are
+  visible underneath the targeted parent node. Do not rely on a suspected
+  plus/minus symbol alone as proof of expansion.
+- Treat a target leaf item as visible only when its actual text is readable in
+  the tree. For example, do not claim GenerateSignal(0,100,10,10) is visible
+  unless that exact text is visible as an entry under the expanded parent.
+- Child nodes are visually indented below their parent. Use this indentation and
+  the parent-child path to distinguish similarly named entries.
+- If several entries contain similar words, prefer the full hierarchy path over
+  a single text match, for example parent -> child.
+- Dropdown trees can open from a closed field that displays the current text.
+  Open such a tree by clicking the visible text/field of the closed dropdown,
+  then click the target tree entry once to select it.
+- After selecting an entry from a dropdown tree, confirm the surrounding dialog
+  with OK only when the intended selection is visible or otherwise clearly
+  accepted.
+
 Tooltips:
 - Many clickable ibaPDA toolbar and UI elements show a tooltip after the mouse
   hovers over them or after an attempted click.
@@ -31,6 +95,17 @@ Tooltips:
   next action instead of repeating the same click.
 - Do not click the tooltip itself; it is only a temporary label and not the
   target control.
+
+Mouse target verification overlays:
+- Planned mouse-target screenshots may contain a red crosshair and a white label
+  describing the proposed action. The crosshair and label can cover UI text,
+  icons, borders, or parts of the intended control.
+- When interpreting these overlay screenshots, account for the possibility that
+  the marker itself hides content underneath. Judge the center of the crosshair
+  together with the surrounding layout and nearby UI geometry.
+- Only the center point/dot of the crosshair is the target. The red line arms
+  are visual guides and must not be treated as the click, hover, or drag-start
+  location.
 """
 
 
@@ -380,6 +455,224 @@ Project opening workflow for later test cases:
   Click the 'Initialwerte laden' button to continue loading the project.
 - Wait until the selected project is loaded before validating its layout.
 """
+
+
+IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT = (
+    IBAPDA_BASE_CONTEXT
+    + IBAPDA_DATA_RECORDING_SHARED_CONTEXT
+    + """
+TF-05 project and goal:
+- The relevant project is named 'test_layout_textanzeige'.
+- TF-05 starts from a freshly reloaded project with an empty central QPanel or
+  empty central display area. Reload the project at the beginning even if it
+  already appears to be loaded, so the QPanel is clean.
+- The test creates and configures three visualization elements: a digital
+  numeric display, a digital text display, and a trend curve.
+- The numeric display and trend curve use the signal GenerateSignal(0,100,10,10).
+- The digital text display uses the text signal GenerateText("ABC_%1").
+
+Project reload for TF-05:
+- At the start of TF-05, use Datei -> Projekt öffnen, select the project
+  'test_layout_textanzeige', confirm with 'Öffnen', and then click
+  'Initialwerte laden' if the initial-values dialog appears.
+- If Data Recording is running while the project is reloaded, confirm the clear
+  project-change dialog with 'Yes' and wait for the reload to finish.
+- After reload, verify that the central QPanel/display area is empty before
+  creating new visualization elements.
+
+Design mode and design toolbar:
+- Open Entwurfsmodus/design mode before creating visualization elements.
+- To open design mode, right-click an empty area of the central QPanel/display
+  area and then left-click the context-menu entry 'Entwurfsmodus'.
+- To exit design mode, use the same toggle: right-click an empty area of the
+  central QPanel/display area and left-click the context-menu entry
+  'Entwurfsmodus' again. Then verify that the additional design toolbar is no
+  longer visible before continuing.
+- Use a clearly empty part of the QPanel for this right-click. Do not right-click
+  the signal tree, bottom Data Recording status pane, tabs, toolbar, or an
+  existing visualization element when trying to open design mode.
+- In design mode, an additional toolbar appears directly below the menu bar and
+  the normal toolbar containing GO, STOP, the client-preferences gear, and the
+  layout dropdown.
+- The design toolbar belongs to the active QPanel tab, such as 'Untitled 1'.
+- The Werkzeuge/tool-pane button is in this design toolbar. In the TF-05
+  reference UI it is the second icon from the left side of that design toolbar.
+  It opens the Werkzeug/Werkzeuge tool navigation pane.
+- When the mouse hovers over a button in the design toolbar, the button under
+  the pointer is highlighted with a light-blue background. Use the mouse_move
+  action to hover over a candidate button and verify the light-blue highlight
+  before clicking. Do not click until the highlighted button is the intended
+  second icon from the left.
+- The fourth icon from the left is a book icon and opens a pane titled
+  'Bibliothek'. That is the wrong pane for TF-05. If 'Bibliothek' appears, treat
+  it as evidence that the wrong icon was clicked; close or ignore that pane and
+  open 'Werkzeuge' with the second icon from the left instead.
+- Do not confuse this design toolbar button with the client-preferences gear in
+  the main toolbar or the Data Recording controls.
+
+Tool navigation pane:
+- The tool pane is titled 'Werkzeuge'. It opens to the left of the QPanel
+  editing area, beside the signal tree.
+- The tool pane contains a proprietary navigation tree: select entries by
+  clicking their visible text or row, use indentation to understand parent-child
+  hierarchy, and expand collapsed plus-symbol nodes only if needed. No node is
+  preselected and all relevant nodes should already be expanded.
+- Relevant tree sections include 'Standardwerkzeuge', 'Ansichten',
+  'Anzeigeelemente', and individual tools such as 'Trendkurve',
+  'Digitale Textanzeige', and 'Digitale Ziffernanzeige'.
+- Add tools by dragging the tool entry from the tool tree into free space in
+  the central QPanel. Place the elements with enough spacing so they do not
+  overlap.
+- When selecting or dragging a tool entry, target the vertical center of the
+  tool's visible text/row. If uncertain whether the intended tool row is being
+  targeted, click the tool row once and verify that that exact row becomes blue
+  highlighted before starting the drag.
+- For a mouse_move that prepares dragging a tool entry, the marker center must
+  be vertically centered on the intended tool text itself. Do not place the
+  marker on the upper edge of the text row, because the drag may start from the
+  row above or from a pane title such as 'Signalbaum'.
+- Use mouse_move to position the pointer on the tool entry first, then use
+  left_click_drag to drag to the absolute target position in the QPanel.
+- The coordinate for left_click_drag is an absolute normalized screen
+  coordinate of the final drop target, not a relative movement from the tool
+  entry. First move to the source tool, then drag to the absolute QPanel
+  destination.
+
+Element placement:
+- Place the digital numeric display, digital text display, and trend curve in
+  separate areas of the empty QPanel.
+- Empty digital numeric display: a small gray-framed element with black display
+  fields, yellow seven-segment placeholder digits, and 'Min:'/'Max:' labels.
+- Empty digital text display: a gray-framed horizontal rectangle with a black
+  inner text area.
+- Empty trend curve: a much larger black plotting area with a light toolbar row
+  at the top containing small gray control icons.
+- Place the two display elements in the upper-left part of the empty QPanel:
+  put the digital numeric display first at the upper-left, then put the digital
+  text display directly to its right with visible spacing between them.
+- Place the trend curve below the two display elements, with enough vertical
+  spacing that it does not overlap either display.
+- After each drag-and-drop, wait briefly and visually confirm that a new element
+  appeared before adding the next one.
+- Before starting configuration, verify that the three elements do not overlap.
+- If any created elements overlap, move one of the overlapping elements by
+  dragging it to a nearby free area of the QPanel before continuing. Do not
+  configure or validate overlapped elements.
+
+Property dialogs and signal dropdowns:
+- Use the exact configuration method specified for each element. Do not choose
+  between double-click and right-click yourself.
+- For TF-05, configure the digital numeric display only by double-clicking the
+  digital numeric display element.
+- If the double-click on the digital numeric display does not open the property
+  dialog, wait briefly, verify that the pointer target is centered on that
+  element, and try the same double-click method once more. Do not switch to the
+  right-click context-menu method for this element.
+- For TF-05, configure the digital text display only by right-clicking the
+  digital text display element and selecting its properties entry from the
+  context menu.
+- For TF-05, configure the trend curve only by dragging the signal from the
+  Signalbaum/signal tree onto the trend curve after design mode has been
+  exited.
+- Signal selection controls in these dialogs are proprietary dropdowns with a
+  visible closed text field. Open the signal dropdown by clicking the visible
+  text of the closed dropdown field.
+- Click vertically centered inside the visible closed dropdown text field. Do
+  not click above, below, or just beside the field; imprecise clicks may do
+  nothing.
+- Do not assume the signal dropdown opened just because it was clicked. Treat it
+  as open only when the proprietary dropdown tree becomes visible underneath or
+  near the field.
+- The opened signal dropdown contains a small proprietary navigation tree,
+  where entries are selected by clicking their visible text and parent-child
+  hierarchy is indicated by indentation.
+- Select signals by expanding 'ibaPDA' -> 'Virtuell' -> the desired signal.
+- In a signal dropdown tree, expand 'ibaPDA' exactly like any other tree node:
+  either single-click the plus symbol next to 'ibaPDA' or double-click the
+  visible 'ibaPDA' node text. Do not use a normal single click on the 'ibaPDA'
+  text to expand it.
+- After expanding 'ibaPDA', expand 'Virtuell' the same way: single-click its plus
+  symbol or double-click its visible node text. Treat expansion as successful
+  only when indented child nodes appear underneath the targeted parent.
+- Use a normal click on the desired signal to select it.
+- Confirm each property dialog with 'OK' after the correct signal is selected.
+- If a dialog provides multiple signal fields, change only the field required
+  for the current element. Do not modify unrelated settings.
+
+Signal tree for trend curve assignment:
+- The Signalbaum/signal tree is the proprietary selection tree on the left side
+  of the ibaPDA main window, to the left of the central QPanel/display area.
+- The gray title/header bar labeled 'ibaPDA-Signalbaum' belongs to the pane
+  itself, not to a signal node. Do not double-click or drag from this title bar
+  when trying to expand or select 'Virtuell' or a signal.
+- If the Signalbaum pane becomes undocked or floating after an accidental
+  double-click on the gray 'ibaPDA-Signalbaum' title/header bar, restore it by
+  double-clicking the same gray title/header bar in the floating pane. Then
+  continue only after the Signalbaum is docked on the left side again.
+- It contains the available signals for the loaded project.
+- For TF-05, use the node 'Virtuell' in the signal tree. Expand it if needed and
+  locate the signal GenerateSignal(0,100,10,10).
+- When expanding 'Virtuell', preferably double-click precisely on the visible
+  'Virtuell' node text. Use a normal single click on the plus symbol only if
+  targeting the exact plus symbol for the 'Virtuell' row itself.
+- In the Signalbaum, plus symbols are indented according to tree depth. The
+  plus for 'Virtuell' is not necessarily vertically aligned with the plus for
+  its parent. Do not click beside the parent plus column when trying to expand a
+  child node; if unsure, double-click the 'Virtuell' node text instead.
+- Do not click in the space between the plus symbol and the text.
+- In the signal tree, target the vertical center of the visible node text/row
+  when selecting, double-clicking, or starting a drag. If needed, first click
+  the node text/row once and verify that the correct row becomes blue
+  highlighted before using it as a drag source.
+- For a mouse_move that prepares dragging GenerateSignal, the marker center
+  must be vertically centered on the GenerateSignal text/row. Do not start the
+  drag from the top border of the row or from the pane title/header; that can
+  drag or select the wrong item such as 'Signalbaum'.
+- Do not mistake the small signal/type icon between the expand control and the
+  node text for the plus symbol. The plus symbol is the leftmost expand/collapse
+  control for the row.
+- Consider 'Virtuell' expanded only if indented signal entries appear underneath
+  it. A suspected minus symbol alone is not sufficient proof that expansion
+  succeeded.
+- Consider GenerateSignal(0,100,10,10) found only when the exact readable
+  GenerateSignal(0,100,10,10) text is visible under 'Virtuell'. If it is not
+  visible, continue expanding or correcting the tree state instead of claiming
+  it is visible.
+- The trend curve is linked by dragging the signal from the signal tree onto
+  the trend curve visualization element in the QPanel.
+- For this signal assignment, the signal tree is only the drag source. The final
+  left_click_drag coordinate must be inside the trend curve element in the
+  QPanel/display area. A drop target in the Signalbaum/signal tree is wrong and
+  must be corrected.
+- Do not configure the trend curve through a property dialog or signal dropdown
+  for TF-05. The required interaction is signal-tree drag-and-drop.
+- Design mode must be exited before assigning the signal to the trend curve.
+- Use mouse_move to position the pointer on the GenerateSignal entry in the
+  signal tree first, then use left_click_drag to drag to the absolute target
+  position inside the trend curve element. During mouse-target verification,
+  the red crosshair for this drag must appear over the trend curve destination,
+  not over the Signalbaum source.
+
+Runtime validation:
+- After creating and configuring all three elements, exit design mode.
+- Start Data Recording only after the elements are configured.
+- Validate that the digital numeric display shows changing numeric values.
+- Validate that the digital text display shows text in the expected format,
+  for example values beginning with 'ABC_'.
+- Validate that the trend curve shows graphical measurement data or a changing
+  signal trace.
+- Stop Data Recording after validation.
+
+Safety boundaries:
+- Do not save unrelated project changes or modify unrelated application
+  settings.
+- Do not allow visualization elements to overlap in a way that prevents
+  validation.
+- If project reload, empty QPanel, design mode, the tool pane, a required tool,
+  a property dialog, a signal dropdown, or Data Recording controls cannot be
+  identified clearly, terminate with failure.
+"""
+)
 
 
 IBAPDA_DATA_RECORDING_CONTEXT = (

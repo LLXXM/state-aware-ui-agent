@@ -12,6 +12,9 @@ class ComputerUseSchemaTests(unittest.TestCase):
 
         self.assertEqual(function["name"], "computer_use")
         self.assertIn("normalized", parameters["coordinate"]["description"])
+        self.assertIn("absolute", parameters["coordinate"]["description"])
+        self.assertIn("not a relative", parameters["action"]["description"])
+        self.assertIn("offset", parameters["action"]["description"])
         self.assertIn("keys", parameters)
         self.assertIn("pixels", parameters)
         self.assertIn("time", parameters)
@@ -113,6 +116,21 @@ class ActionExecutorContractTests(unittest.TestCase):
         self.assertTrue(result)
         click.assert_called_once_with(x=480, y=810, button="left", clicks=3)
 
+    @patch("utils.action_executor.pyautogui.doubleClick")
+    def test_double_click_uses_explicit_interval(self, double_click):
+        result = self.executor._execute_computer_action({
+            "action": "double_click",
+            "coordinate": [250, 750],
+        })
+
+        self.assertTrue(result)
+        double_click.assert_called_once_with(
+            x=480,
+            y=810,
+            button="left",
+            interval=0.12,
+        )
+
     @patch("utils.action_executor.pyautogui.hotkey")
     def test_key_sequence_is_executed_as_hotkey(self, hotkey):
         result = self.executor._execute_computer_action({
@@ -154,6 +172,16 @@ class ActionExecutorContractTests(unittest.TestCase):
 
         self.assertFalse(result)
         click.assert_not_called()
+
+    @patch("utils.action_executor.pyautogui.dragTo")
+    def test_left_click_drag_uses_normalized_absolute_target(self, drag_to):
+        result = self.executor._execute_computer_action({
+            "action": "left_click_drag",
+            "coordinate": [750, 250],
+        })
+
+        self.assertTrue(result)
+        drag_to.assert_called_once_with(1440, 270, duration=0.5, button="left")
 
 
 if __name__ == "__main__":

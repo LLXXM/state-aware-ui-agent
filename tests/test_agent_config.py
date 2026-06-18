@@ -16,6 +16,9 @@ class AgentConfigTests(unittest.TestCase):
             "save_screenshots": config.SAVE_SCREENSHOTS,
             "save_action_overlays": config.SAVE_ACTION_OVERLAYS,
             "verify_mouse_targets": config.VERIFY_MOUSE_TARGETS,
+            "abort_on_mouse_verification_failure": (
+                config.ABORT_ON_MOUSE_VERIFICATION_FAILURE
+            ),
             "screenshot_dir": config.SCREENSHOT_DIR,
             "log_level": config.LOG_LEVEL,
             "max_task_duration": config.MAX_TASK_DURATION,
@@ -71,6 +74,7 @@ class AgentConfigTests(unittest.TestCase):
             save_screenshots=False,
             save_action_overlays=False,
             verify_mouse_targets=False,
+            abort_on_mouse_verification_failure=True,
             screenshot_dir="custom-screens",
             log_level="DEBUG",
             max_task_duration=25,
@@ -100,6 +104,7 @@ class AgentConfigTests(unittest.TestCase):
         self.assertFalse(agent.dry_run)
         self.assertFalse(agent.save_action_overlays)
         self.assertFalse(agent.verify_mouse_targets)
+        self.assertTrue(agent.abort_on_mouse_verification_failure)
         self.assertEqual(agent.allowed_actions, {"left_click", "terminate"})
         self.assertEqual(agent.max_executed_mouse_actions, 2)
         self.assertEqual(agent.additional_system_prompt, "Application controls")
