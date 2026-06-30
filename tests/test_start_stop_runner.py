@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import config
@@ -302,8 +303,6 @@ class TestCaseDefinitionTests(unittest.TestCase):
             IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT,
         )
         self.assertIn("test_layout_multistatelabel", case.task)
-        self.assertIn("triangle signal", case.task)
-        self.assertIn("-100 to 100", case.task)
         self.assertIn("trend curve", case.task)
         self.assertIn("multistatelabel", case.task)
         self.assertIn("'Wert > 0'", case.task)
@@ -316,6 +315,11 @@ class TestCaseDefinitionTests(unittest.TestCase):
         self.assertIn("both semantic states", case.task)
         self.assertIn("Do not open or switch projects", case.task)
         self.assertIn("Do not enter design mode", case.task)
+        context = case.additional_system_prompt
+        self.assertIn("triangle signal", context)
+        self.assertIn("value range from -100 to 100", context)
+        self.assertIn("large black chart", context)
+        self.assertIn("same full-screen observation", context)
         self.assertIn("checkpoint", case.allowed_actions)
         self.assertIn("wait", case.allowed_actions)
         self.assertIn("terminate", case.allowed_actions)
@@ -348,15 +352,22 @@ class TestCaseRunnerTests(unittest.TestCase):
         result = run_test_case(load_test_case("TF-00"))
 
         self.assertEqual(ensure_closed.call_count, 2)
+        report_base = Path(result["report_dir"])
+        pre_cleanup_report_dir = str(report_base / "pre_cleanup")
+        post_cleanup_report_dir = str(report_base / "post_cleanup")
         self.assertEqual(
             ensure_closed.call_args_list[0].kwargs,
-            {"screenshot_dir": "artifacts/ui_tests/tf_00/pre_cleanup"},
+            {
+                "screenshot_dir": str(Path(pre_cleanup_report_dir) / "screenshots"),
+                "report_dir": pre_cleanup_report_dir,
+            },
         )
         self.assertEqual(
             ensure_closed.call_args_list[1].kwargs,
             {
-                "screenshot_dir": "artifacts/ui_tests/tf_00/post_cleanup",
+                "screenshot_dir": str(Path(post_cleanup_report_dir) / "screenshots"),
                 "check_connection": False,
+                "report_dir": post_cleanup_report_dir,
             },
         )
         kwargs = agent_class.call_args.kwargs
@@ -366,7 +377,7 @@ class TestCaseRunnerTests(unittest.TestCase):
             case.max_executed_mouse_actions,
         )
         self.assertEqual(kwargs["additional_system_prompt"], IBAPDA_UI_CONTEXT)
-        self.assertEqual(kwargs["screenshot_dir"], "artifacts/ui_tests/tf_00")
+        self.assertEqual(kwargs["screenshot_dir"], str(Path(kwargs["report_dir"]) / "screenshots"))
         self.assertEqual(kwargs["verify_mouse_targets"], case.verify_mouse_targets)
         self.assertEqual(
             kwargs["abort_on_mouse_verification_failure"],
@@ -506,6 +517,11 @@ class TestCaseRunnerTests(unittest.TestCase):
         self.assertIn("preparation", agent_class.call_args_list[0].kwargs["report_dir"])
         self.assertIn("measurement_run_01", agent_class.call_args_list[1].kwargs["report_dir"])
         self.assertIn("measurement_run_02", agent_class.call_args_list[2].kwargs["report_dir"])
+        for call in agent_class.call_args_list:
+            self.assertEqual(
+                call.kwargs["screenshot_dir"],
+                str(Path(call.kwargs["report_dir"]) / "screenshots"),
+            )
 
     @patch("ui_tests.run_test_case.SeeThinkActAgent")
     @patch(
@@ -515,9 +531,9 @@ class TestCaseRunnerTests(unittest.TestCase):
     def test_failed_pre_cleanup_prevents_test_start(self, ensure_closed, agent_class):
         result = run_test_case(load_test_case("TF-00"))
 
-        ensure_closed.assert_called_once_with(
-            screenshot_dir="artifacts/ui_tests/tf_00/pre_cleanup"
-        )
+        cleanup_kwargs = ensure_closed.call_args.kwargs
+        self.assertTrue(cleanup_kwargs["screenshot_dir"].endswith("pre_cleanup\\screenshots"))
+        self.assertTrue(cleanup_kwargs["report_dir"].endswith("pre_cleanup"))
         agent_class.assert_not_called()
         self.assertEqual(result["status"], "pre_cleanup_failed")
 

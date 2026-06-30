@@ -120,7 +120,7 @@ class SeeThinkActAgent:
         
         # Create screenshot directory
         if self.save_screenshots:
-            self.screenshot_dir.mkdir(exist_ok=True)
+            self.screenshot_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize computer use tool
         self.computer_use = ComputerUse(

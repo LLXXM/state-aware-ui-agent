@@ -54,12 +54,16 @@ def default_report_dir_for_case(case: UiTestCase) -> str:
     )
 
 
-def _build_agent(case: UiTestCase, artifact_dir: str, report_dir: str) -> SeeThinkActAgent:
+def _screenshots_dir_for_report(report_dir: str | Path) -> str:
+    return str(Path(report_dir) / "screenshots")
+
+
+def _build_agent(case: UiTestCase, report_dir: str) -> SeeThinkActAgent:
     return SeeThinkActAgent(
         dry_run=False,
         max_iterations=case.max_iterations,
         save_screenshots=True,
-        screenshot_dir=artifact_dir,
+        screenshot_dir=_screenshots_dir_for_report(report_dir),
         max_task_duration=case.max_task_duration,
         max_repeated_actions=case.max_repeated_actions,
         max_consecutive_failures=case.max_consecutive_failures,
@@ -80,11 +84,10 @@ def _build_agent(case: UiTestCase, artifact_dir: str, report_dir: str) -> SeeThi
 
 def _run_case_workflow(
     case: UiTestCase,
-    artifact_dir: str,
     report_dir: str,
 ) -> dict[str, Any]:
     if not case.prepare_task:
-        agent = _build_agent(case, artifact_dir, report_dir)
+        agent = _build_agent(case, report_dir)
         if not agent.ollama_client.test_connection():
             return {
                 "success": False,
@@ -96,7 +99,6 @@ def _run_case_workflow(
     report_base = Path(report_dir)
     preparation_agent = _build_agent(
         case,
-        f"{artifact_dir}/preparation",
         str(report_base / "preparation"),
     )
     if not preparation_agent.ollama_client.test_connection():
@@ -123,7 +125,6 @@ def _run_case_workflow(
         run_label = f"measurement_run_{run_index:02d}"
         run_agent = _build_agent(
             case,
-            f"{artifact_dir}/{run_label}",
             str(report_base / run_label),
         )
         started_at = datetime.now().isoformat(timespec="seconds")
@@ -161,12 +162,14 @@ def _run_case_workflow(
 
 def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[str, Any]:
     """Execute one test case using optional generic ibaPDA safety boundaries."""
-    artifact_dir = f"artifacts/ui_tests/{case.case_id.lower().replace('-', '_')}"
     report_dir = report_dir or default_report_dir_for_case(case)
+    report_base = Path(report_dir)
 
     if case.cleanup_ibapda_before:
+        pre_cleanup_report_dir = str(report_base / "pre_cleanup")
         pre_cleanup = ensure_ibapda_closed(
-            screenshot_dir=f"{artifact_dir}/pre_cleanup"
+            screenshot_dir=_screenshots_dir_for_report(pre_cleanup_report_dir),
+            report_dir=pre_cleanup_report_dir,
         )
     else:
         pre_cleanup = _not_required_result("No ibaPDA pre-cleanup configured.")
@@ -182,8 +185,7 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
 
     print(f"Starting UI test case {case.case_id}: {case.description}")
     print("Move the mouse to the top-left corner to trigger pyautogui failsafe.")
-    print(f"Screenshots are stored in {artifact_dir}.")
-    print(f"HTML report will be written to {report_dir}.")
+    print(f"HTML reports and screenshots will be written to {report_dir}.")
 
     workflow: dict[str, Any]
     post_cleanup: dict[str, Any]
@@ -193,7 +195,7 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
         minimize_vscode_windows_for_test()
     try:
         try:
-            workflow = _run_case_workflow(case, artifact_dir, report_dir)
+            workflow = _run_case_workflow(case, report_dir)
         except Exception as exc:
             workflow = {
                 "success": False,
@@ -202,9 +204,11 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
             }
 
         if case.cleanup_ibapda_after:
+            post_cleanup_report_dir = str(report_base / "post_cleanup")
             post_cleanup = ensure_ibapda_closed(
-                screenshot_dir=f"{artifact_dir}/post_cleanup",
+                screenshot_dir=_screenshots_dir_for_report(post_cleanup_report_dir),
                 check_connection=False,
+                report_dir=post_cleanup_report_dir,
             )
         else:
             post_cleanup = _not_required_result("No ibaPDA post-cleanup configured.")

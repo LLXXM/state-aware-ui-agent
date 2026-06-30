@@ -2,7 +2,7 @@
 
 Windows UI agent prototype for controlled ibaPDA test cases using Ollama and
 Qwen3.5. The agent observes screenshots, proposes structured computer actions,
-verifies mouse targets, and records screenshot artifacts for each run.
+verifies mouse targets, and records self-contained HTML reports for each run.
 
 ## Structure
 
@@ -18,7 +18,8 @@ Computer-Use-Agent/
       tf_00.py                 Data Recording start/stop cycle
     support/                   Cleanup and window-management helpers
   tests/                       Automated unit tests
-  artifacts/ui_tests/          Generated run screenshots, ignored by Git
+  ui_tests/test_cases/
+    Reports_Masterarbeit/      Generated reports and screenshots, ignored by Git
 ```
 
 ## Run A Test Case
@@ -86,6 +87,11 @@ Report output:
 
 - By default, UI test reports are written next to the test-case scripts under
   `ui_tests/test_cases/Reports_Masterarbeit/<tf_xx>/...`.
+- Each report folder is self-contained. Screenshots, action overlays, and other
+  image artifacts are stored below that report folder in `screenshots/`.
+- For prepared measurement runs, preparation, each measurement run, and cleanup
+  each get their own subfolder with its own HTML report and `screenshots/`
+  directory.
 - The older `ui_tests/test_cases/Reports/...` folder is left untouched, so old
   exploratory runs and new master-thesis runs stay separated.
 - Change `config.TEST_CASE_REPORTS_DIR_NAME` to use another default report

@@ -33,6 +33,7 @@ Safety restrictions:
 def ensure_ibapda_closed(
     screenshot_dir: str = "artifacts/ui_tests/ensure_ibapda_closed",
     check_connection: bool = True,
+    report_dir: str | None = None,
 ) -> dict:
     """Stop recording if necessary and close an existing ibaPDA client window."""
     if find_ibapda_window_handle() is None:
@@ -62,6 +63,7 @@ def ensure_ibapda_closed(
         max_consecutive_failures=2,
         allowed_actions={"left_click", "wait", "checkpoint", "terminate"},
         max_executed_mouse_actions=2,
+        report_dir=report_dir,
         additional_system_prompt=IBAPDA_UI_CONTEXT,
     )
 
