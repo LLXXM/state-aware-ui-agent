@@ -36,9 +36,9 @@ The action to perform. Available actions:
 * `mouse_move`: Move the cursor to `coordinate`.
 * `left_click` or `click`, `right_click`, `middle_click`: Click at `coordinate`.
 * `double_click`, `triple_click`: Click multiple times at `coordinate`.
-* `left_click_drag`: Drag from the current mouse position to the absolute target
-  position given by `coordinate` on the normalized screen. It is not a relative
-  offset.
+* `left_click_drag`: Drag from the absolute source position given by
+  `start_coordinate` to the absolute target position given by `coordinate` on
+  the normalized screen. Neither coordinate is a relative offset.
 * `scroll`: Perform vertical scrolling using `pixels`.
 * `hscroll`: Perform horizontal scrolling using `pixels`.
 * `wait`: Wait for `time` seconds.
@@ -87,7 +87,18 @@ The action to perform. Available actions:
                 "description": (
                     "A normalized absolute [x, y] position on a 0-1000 screen scale, "
                     "required for mouse actions. For left_click_drag this is the absolute "
-                    "drag target position, not a relative offset from the current pointer."
+                    "drag target/end position, not a relative offset."
+                ),
+                "items": {"type": "number", "minimum": 0, "maximum": 1000},
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array",
+            },
+            "start_coordinate": {
+                "description": (
+                    "Required normalized absolute [x, y] drag source for "
+                    "`action=left_click_drag`. The executor first moves to this "
+                    "source point, then drags to `coordinate`."
                 ),
                 "items": {"type": "number", "minimum": 0, "maximum": 1000},
                 "maxItems": 2,
@@ -156,6 +167,12 @@ Use a mouse and keyboard to interact with a computer.
 
         if action in self.MOUSE_ACTIONS:
             self._validate_coordinate(arguments.get("coordinate"))
+            if action == "left_click_drag":
+                if "start_coordinate" not in arguments:
+                    raise ActionValidationError(
+                        "left_click_drag requires start_coordinate [x, y]"
+                    )
+                self._validate_coordinate(arguments.get("start_coordinate"))
         elif action == "key":
             keys = arguments.get("keys")
             if not isinstance(keys, list) or not keys:

@@ -462,6 +462,114 @@ Project opening workflow for later test cases:
 """
 
 
+IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT = (
+    IBAPDA_BASE_CONTEXT
+    + IBAPDA_DATA_RECORDING_SHARED_CONTEXT
+    + """
+TF-04 layout facts:
+- The relevant project is 'test_layout_komplex'. It shows a regular docked
+  QPanel with one primary tab row and one secondary tab row.
+- Canonical traversal, from left to right:
+  Start (2): Start; Spielwiese.
+  Demos (5): Wasser behälter; QPanel live; ActiveX; Teststand; Aufzug.
+  Allgemeine Funktionen (6): Allgemeine Funktionen; Objekt Eigenschaften;
+    Gruppen; Bibliothek; Dynamiken; Sprache.
+  Anzeige Elemente (6): Instrumententafel; Textfeld; Mehrfachstatus
+    Textanzeige; Mehrfachstatus Bildanzeige; Digitale Ziffernanzeige;
+    Digitale Textanzeige.
+  Eingabe Elemente (11): QPanel Eingaben; Button; Auswahlfeld; Dateiscanner;
+    Dateiauswahl; Auswahlliste; Numerisch auf/ab; Optionsfeld; Schieberegler;
+    Schalter; Werteingabe.
+  Ansichten (18): Balken anzeige; Kamera ansicht; Diagramm; Kreis ansicht;
+    Zyklus ansicht; FFT Ansicht; HD Ereignisliste; HD-Navigation;
+    HD Zeitabschnitts tabelle; HD-Trendkurve; Offline Trendkurve; Orbit
+    Ansicht; PQU Spektrum; Zeiger diagramm; Oszilloskop Ansicht; Signalbaum;
+    Trend kurve; Überwachungs ansicht.
+  Gestaltung/Layout/Web (5): Bild; Form; Symbol; Layout register; Web browser.
+- Total: 7 primary tabs and 53 secondary tabs. Use only these exact canonical
+  names in checkpoints.
+
+Tab certainty rules:
+- Click or checkpoint a tab only when the full canonical tab label and the whole
+  tab rectangle are visible and readable in the current screenshot.
+- Require 100% visual evidence from the current screenshot for a tab name before
+  clicking or checkpointing it. "Visible/readable" means the exact complete
+  canonical label can be read on the current screenshot itself.
+- A clipped or abbreviated label such as 'Sig...', 'Trend...', or any label with
+  ellipses is not readable evidence for any canonical tab name. Never infer
+  Signalbaum, Trend kurve, Überwachungs ansicht, or any other tab from a clipped
+  prefix, position, order, memory, action history, or expected checklist entry.
+- If a target secondary tab is hidden, clipped, partially readable, abbreviated,
+  inferred from position, or remembered from history, the next action must be to
+  use the horizontal drag-bar to make the exact full tab label readable. Do not
+  click it and do not checkpoint it before that.
+- The action history records attempts, not proof of UI effects. After every tab
+  click, verify from the next screenshot that the intended canonical tab is
+  active before checkpointing or moving on.
+- A checkpoint for a secondary tab must include the exact primary tab name, exact
+  secondary tab name, current visited count, readable tab rows, and visible
+  QPanel/display-area content. The checkpoint must explicitly state that the
+  complete secondary tab label was readable in the current screenshot before the
+  click and after selection. Do not use ordinals like '17th tab' or truncated
+  labels like 'Sig...'.
+- Similar-looking pages are not identical proof. If the content appears
+  unchanged after a click, verify the active tab label instead of assuming the
+  click worked.
+- Some visible content areas may contain tertiary or nested tabs. Do not click
+  them; TF-04 only visits the primary and secondary QPanel tab rows.
+
+Start/reset rule:
+- A run may begin at Start/Start or at the rightmost tab from a previous run.
+  Reset only by using readable tab labels and the horizontal drag-bar.
+- If Start or Start/Start is not fully readable, do not click guessed
+  coordinates. Reveal left-side tabs with the drag-bar until Start and Demos are
+  readable, then click Start.
+
+Horizontal drag-bar:
+- Use only the bottom horizontal drag-bar at the boundary between the white
+  QPanel/display area above and the beige status bar below. It is not the green
+  tab row and not inside the white content area.
+- In normalized action coordinates, the drag-bar thumb is normally around
+  y=920-930 on the 1920x1080 ibaPDA layout. Use this y range unless the current
+  screenshot clearly shows that the lower-center area of the gray thumb is
+  somewhere else. A y value above or below this range is not acceptable merely
+  because it is near the bar; it must still land on the visible gray thumb's
+  lower half or lower edge.
+- For `left_click_drag`, `start_coordinate` is mandatory and must be the visual
+  lower-center area of the current gray thumb. Because targeting the visual
+  center tends to land slightly above the drag-bar, prefer the lower half or
+  lower edge of the visible gray thumb while still staying on the thumb itself.
+  `coordinate` is the absolute final target. Do not rely on a previous
+  `mouse_move` as the drag start.
+- The drag starts at mouse-down. If `start_coordinate` is on the empty track or
+  rail instead of on the gray thumb, ibaPDA may move the thumb immediately
+  before the drag motion begins. Therefore, never start a drag from the middle
+  or far side of the full bar unless that is where the visible gray thumb
+  actually is. If the thumb is visually at the left end, `start_coordinate.x`
+  must also be near the left end of the visible thumb. The y coordinate should
+  still hit the thumb's lower half/lower edge, not the area above the bar.
+- Direction rule for TF-04 horizontal tab navigation:
+  - To show tabs that are cut off or hidden to the right, drag the gray thumb to
+    the right: final `coordinate.x` must be greater than `start_coordinate.x`.
+  - To show tabs that are cut off or hidden to the left, drag the gray thumb to
+    the left: final `coordinate.x` must be less than `start_coordinate.x`.
+- After every drag, re-read the visible tab labels from the screenshot. Do not
+  click or checkpoint until the target tab is fully visible and readable.
+- Do not use scroll or hscroll actions in TF-04.
+
+Safety boundaries:
+- Data Recording should already be active during the measured run. Do not stop
+  it during the measured navigation.
+- Do not open or switch projects, enter design mode, move QPanel objects,
+  configure visualization elements, change signals, open property dialogs, save
+  changes, or interact with the bottom Datenaufzeichnungsstatus pane.
+- If the complex layout, tab structure, horizontal drag-bar, active Data
+  Recording, or content validation cannot be identified clearly, terminate with
+  failure instead of guessing.
+"""
+)
+
+
 IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT = (
     IBAPDA_BASE_CONTEXT
     + IBAPDA_DATA_RECORDING_SHARED_CONTEXT

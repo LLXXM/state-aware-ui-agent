@@ -13,12 +13,15 @@ class ComputerUseSchemaTests(unittest.TestCase):
         self.assertEqual(function["name"], "computer_use")
         self.assertIn("normalized", parameters["coordinate"]["description"])
         self.assertIn("absolute", parameters["coordinate"]["description"])
-        self.assertIn("not a relative", parameters["action"]["description"])
+        self.assertIn("Neither coordinate is a relative offset", parameters["action"]["description"])
         self.assertIn("offset", parameters["action"]["description"])
         self.assertIn("keys", parameters)
         self.assertIn("pixels", parameters)
         self.assertIn("time", parameters)
         self.assertIn("intent", parameters)
+        self.assertIn("start_coordinate", parameters)
+        self.assertIn("Required", parameters["start_coordinate"]["description"])
+        self.assertIn("drag source", parameters["start_coordinate"]["description"])
         self.assertIn("intent", function["parameters"]["required"])
 
     def test_accepts_action_intent(self):
@@ -70,6 +73,30 @@ class ComputerUseSchemaTests(unittest.TestCase):
             ComputerUse().validate_arguments({
                 "action": "left_click",
                 "coordinate": [1500, 200],
+            })
+
+    def test_accepts_drag_start_coordinate(self):
+        arguments = ComputerUse().validate_arguments({
+            "action": "left_click_drag",
+            "start_coordinate": [250, 900],
+            "coordinate": [750, 900],
+        })
+
+        self.assertEqual(arguments["start_coordinate"], [250, 900])
+
+    def test_rejects_drag_without_start_coordinate(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({
+                "action": "left_click_drag",
+                "coordinate": [750, 900],
+            })
+
+    def test_rejects_drag_start_coordinate_outside_normalized_range(self):
+        with self.assertRaises(ActionValidationError):
+            ComputerUse().validate_arguments({
+                "action": "left_click_drag",
+                "start_coordinate": [250, 1200],
+                "coordinate": [750, 900],
             })
 
     def test_rejects_termination_without_status(self):
@@ -174,14 +201,27 @@ class ActionExecutorContractTests(unittest.TestCase):
         click.assert_not_called()
 
     @patch("utils.action_executor.pyautogui.dragTo")
-    def test_left_click_drag_uses_normalized_absolute_target(self, drag_to):
+    def test_left_click_drag_without_start_coordinate_is_rejected(self, drag_to):
         result = self.executor._execute_computer_action({
             "action": "left_click_drag",
             "coordinate": [750, 250],
         })
 
+        self.assertFalse(result)
+        drag_to.assert_not_called()
+
+    @patch("utils.action_executor.pyautogui.moveTo")
+    @patch("utils.action_executor.pyautogui.dragTo")
+    def test_left_click_drag_can_use_explicit_start_coordinate(self, drag_to, move_to):
+        result = self.executor._execute_computer_action({
+            "action": "left_click_drag",
+            "start_coordinate": [250, 900],
+            "coordinate": [750, 900],
+        })
+
         self.assertTrue(result)
-        drag_to.assert_called_once_with(1440, 270, duration=0.5, button="left")
+        move_to.assert_called_once_with(480, 972, duration=0.5)
+        drag_to.assert_called_once_with(1440, 972, duration=1.5, button="left")
 
 
 if __name__ == "__main__":

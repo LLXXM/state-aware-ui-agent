@@ -44,6 +44,9 @@ CASE = UiTestCase(
     description="Start and stop ibaPDA Data Recording and leave the client closed.",
     task=TASK,
     additional_system_prompt=IBAPDA_UI_CONTEXT,
+    allowed_actions=frozenset(
+        {"double_click", "left_click", "wait", "checkpoint", "terminate"}
+    ),
     max_executed_mouse_actions=10,
 
     verify_mouse_targets=True,     # True

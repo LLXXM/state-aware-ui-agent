@@ -51,7 +51,12 @@ class AgentPromptTests(unittest.TestCase):
         self.assertIn('"action": "left_click"', prompt)
         self.assertIn("2026-06-16T18:30:00", prompt)
         self.assertIn("Click the GO button to start recording.", prompt)
-        self.assertIn("executed", prompt)
+        self.assertIn("attempted", prompt)
+        self.assertNotIn("-> executed", prompt)
+        self.assertIn("entries are attempts", prompt)
+        self.assertIn("only means the tool", prompt)
+        self.assertIn("does not prove that the target", prompt)
+        self.assertIn("switched tabs", prompt)
         self.assertIn("do not repeat successful steps", prompt)
 
     def test_system_prompt_reserves_answer_for_terminal_response(self):

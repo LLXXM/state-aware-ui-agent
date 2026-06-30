@@ -5,8 +5,10 @@ import json
 import base64
 from typing import List, Dict, Any, Optional
 import io
+import time
 
 import ollama
+from ollama import ResponseError
 from PIL import Image
 
 import config
@@ -31,6 +33,11 @@ class OllamaVisionClient:
         self.model = model
         self.options = dict(config.MODEL_OPTIONS if options is None else options)
         self.client = ollama
+
+    def _is_retryable_chat_error(self, error: Exception) -> bool:
+        """Return True for transient Ollama/API errors that can recover quickly."""
+        status_code = getattr(error, "status_code", None)
+        return status_code in config.OLLAMA_CHAT_RETRY_STATUS_CODES
 
     def _to_plain_data(self, value):
         """Convert Ollama response objects to dict/list primitives."""
@@ -80,27 +87,40 @@ class OllamaVisionClient:
         Returns:
             Response dictionary from Ollama
         """
-        try:
-            # Prepare the request
-            request_params = {
-                'model': self.model,
-                'messages': messages,
-                'stream': stream,
-                'options': self.options,
-            }
-            
-            # Add tools if provided
-            if tools:
-                request_params['tools'] = tools
-            
-            # Make the request
-            response = self.client.chat(**request_params)
-            
-            return self._to_plain_data(response)
-            
-        except Exception as e:
-            print(f"Error in Ollama chat: {e}")
-            raise
+        # Prepare the request
+        request_params = {
+            'model': self.model,
+            'messages': messages,
+            'stream': stream,
+            'options': self.options,
+        }
+        
+        # Add tools if provided
+        if tools:
+            request_params['tools'] = tools
+
+        max_retries = max(1, config.OLLAMA_CHAT_MAX_RETRIES)
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Make the request
+                response = self.client.chat(**request_params)
+                return self._to_plain_data(response)
+            except ResponseError as e:
+                if attempt < max_retries and self._is_retryable_chat_error(e):
+                    print(
+                        "Retryable Ollama chat error "
+                        f"({e}); retrying {attempt}/{max_retries - 1} "
+                        f"after {config.OLLAMA_CHAT_RETRY_DELAY} seconds"
+                    )
+                    time.sleep(config.OLLAMA_CHAT_RETRY_DELAY)
+                    continue
+                print(f"Error in Ollama chat: {e}")
+                raise
+            except Exception as e:
+                print(f"Error in Ollama chat: {e}")
+                raise
+
+        raise RuntimeError("Ollama chat retry loop exited unexpectedly.")
     
     def chat_with_image(self,
                        user_query: str,

@@ -6,6 +6,7 @@ from ui_contexts import (
     IBAPDA_TF_01_LAYOUT_CONTEXT,
     IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT,
     IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT,
+    IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT,
     IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT,
     IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT,
     IBAPDA_UI_CONTEXT,
@@ -58,10 +59,26 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("Ansichten starten", IBAPDA_UI_CONTEXT)
         self.assertIn("GO is directly to the left of STOP", IBAPDA_UI_CONTEXT)
         self.assertIn("labeled 'GO'", IBAPDA_UI_CONTEXT)
+        self.assertIn("locate STOP first", IBAPDA_UI_CONTEXT)
+        self.assertIn("green/black two-person/user icon", IBAPDA_UI_CONTEXT)
+        self.assertIn("black/green\n  client-preferences gear", IBAPDA_UI_CONTEXT)
+        self.assertIn("black-outlined, white-filled pause\n  button", IBAPDA_UI_CONTEXT)
+        self.assertIn("button immediately to its right", IBAPDA_UI_CONTEXT)
+        self.assertIn("two black vertical pause bars", IBAPDA_UI_CONTEXT)
+        self.assertIn("remain in the same fixed positions", IBAPDA_UI_CONTEXT)
+        self.assertIn("stable white 'GO'/'STOP' text", IBAPDA_UI_CONTEXT)
+        self.assertIn("fill colors only to determine\n  the state", IBAPDA_UI_CONTEXT)
+        self.assertIn("fully filled green circle", IBAPDA_UI_CONTEXT)
+        self.assertIn("white 'GO' text", IBAPDA_UI_CONTEXT)
+        self.assertIn("GO changes to gray", IBAPDA_UI_CONTEXT)
+        self.assertIn("STOP changes to red", IBAPDA_UI_CONTEXT)
         self.assertIn("center of the red circle", IBAPDA_UI_CONTEXT)
         self.assertIn("client preferences controls", IBAPDA_UI_CONTEXT)
         self.assertIn("two-person icon", IBAPDA_UI_CONTEXT)
         self.assertIn("triangle/play symbol", IBAPDA_UI_CONTEXT)
+        self.assertIn("white interior around the\n  play symbol", IBAPDA_UI_CONTEXT)
+        self.assertIn("triangle is green, not\n  white", IBAPDA_UI_CONTEXT)
+        self.assertIn("not filled solid green", IBAPDA_UI_CONTEXT)
         self.assertIn("Never", IBAPDA_UI_CONTEXT)
         self.assertIn("GO is gray", IBAPDA_UI_CONTEXT)
         self.assertIn("STOP is red", IBAPDA_UI_CONTEXT)
@@ -79,6 +96,10 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("Erfassung wird gestartet", IBAPDA_UI_CONTEXT)
         self.assertIn("close by itself after a few seconds", IBAPDA_UI_CONTEXT)
         self.assertIn("within about 3 seconds", IBAPDA_UI_CONTEXT)
+        self.assertIn("treat the GO click as successful", IBAPDA_UI_CONTEXT)
+        self.assertIn("positive evidence that the GO button was\n  clicked correctly", IBAPDA_UI_CONTEXT)
+        self.assertIn("OK becomes enabled/clickable", IBAPDA_UI_CONTEXT)
+        self.assertIn("blue focus/outline frame", IBAPDA_UI_CONTEXT)
         self.assertIn("Do not repeat the exact\n  same GO click coordinates", IBAPDA_UI_CONTEXT)
         self.assertIn("continue the test without clicking GO again", IBAPDA_UI_CONTEXT)
         self.assertIn("Do not click GO a second time", IBAPDA_UI_CONTEXT)
@@ -145,6 +166,66 @@ class UiContextsTests(unittest.TestCase):
         self.assertIn("Initialwerte laden", IBAPDA_PROJECT_OPEN_CONTEXT)
         self.assertIn("Yes", IBAPDA_PROJECT_OPEN_CONTEXT)
 
+
+    def test_tf_04_context_describes_complex_layout_navigation(self):
+        context = IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT
+
+        self.assertIn("test_layout_komplex", context)
+        self.assertIn("one primary tab row and one secondary tab row", context)
+        self.assertIn("Total: 7 primary tabs and 53 secondary tabs", context)
+        self.assertIn("Start (2): Start; Spielwiese", context)
+        self.assertIn("Demos (5): Wasser behälter; QPanel live; ActiveX", context)
+        self.assertIn("Allgemeine Funktionen (6): Allgemeine Funktionen", context)
+        self.assertIn("Anzeige Elemente (6): Instrumententafel; Textfeld", context)
+        self.assertIn("Eingabe Elemente (11): QPanel Eingaben; Button", context)
+        self.assertIn("Ansichten (18): Balken anzeige; Kamera ansicht", context)
+        self.assertIn("Oszilloskop Ansicht; Signalbaum", context)
+        self.assertIn("Trend kurve; Überwachungs ansicht", context)
+        self.assertIn("Gestaltung/Layout/Web (5): Bild; Form; Symbol", context)
+
+        self.assertIn("Tab certainty rules", context)
+        self.assertIn("full canonical tab label", context)
+        self.assertIn("100% visual evidence", context)
+        self.assertIn("exact complete\n  canonical label", context)
+        self.assertIn("A clipped or abbreviated label", context)
+        self.assertIn("Never infer\n  Signalbaum", context)
+        self.assertIn("the next action must be to\n  use the horizontal drag-bar", context)
+        self.assertIn("action history records attempts", context)
+        self.assertIn("not proof of UI effects", context)
+        self.assertIn("Do not use ordinals", context)
+        self.assertIn("Do not click", context)
+        self.assertIn("tertiary or nested tabs", context)
+
+        self.assertIn("Start/reset rule", context)
+        self.assertIn("Start/Start", context)
+        self.assertIn("Reveal left-side tabs", context)
+
+        self.assertIn("Horizontal drag-bar", context)
+        self.assertIn("boundary between the white", context)
+        self.assertIn("normalized action coordinates", context)
+        self.assertIn("y=920-930", context)
+        self.assertIn("lower-center area of the gray thumb", context)
+        self.assertIn("visible gray thumb's\n  lower half or lower edge", context)
+        self.assertIn("not acceptable merely\n  because it is near the bar", context)
+        self.assertIn("start_coordinate` is mandatory", context)
+        self.assertIn("prefer the lower half or\n  lower edge", context)
+        self.assertIn("The drag starts at mouse-down", context)
+        self.assertIn("empty track or\n  rail instead of on the gray thumb", context)
+        self.assertIn("must also be near the left end", context)
+        self.assertIn("not the area above the bar", context)
+        self.assertIn("Direction rule for TF-04 horizontal tab navigation", context)
+        self.assertIn("show tabs that are cut off or hidden to the right", context)
+        self.assertIn("drag the gray thumb to\n    the right", context)
+        self.assertIn("show tabs that are cut off or hidden to the left", context)
+        self.assertIn("drag the gray thumb to\n    the left", context)
+        self.assertIn("coordinate.x` must be greater than `start_coordinate.x", context)
+        self.assertIn("must be less than `start_coordinate.x", context)
+        self.assertIn("Do not use scroll or hscroll", context)
+
+        self.assertIn("Safety boundaries", context)
+        self.assertIn("Data Recording should already be active", context)
+        self.assertIn("Do not open or switch projects", context)
+        self.assertIn("Datenaufzeichnungsstatus", context)
 
     def test_tf_05_context_describes_design_configuration_workflow(self):
         context = IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT

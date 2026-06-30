@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from ui_contexts import IBAPDA_UI_CONTEXT
 from ui_tests.support.ibapda_cleanup import ensure_ibapda_closed
+from ui_tests.support.window_setup import close_existing_ibapda_window_and_confirm
 
 
 class IbapdaCleanupTests(unittest.TestCase):
@@ -82,6 +83,28 @@ class IbapdaCleanupTests(unittest.TestCase):
         agent_class.assert_not_called()
         close_window.assert_not_called()
         self.assertEqual(result["status"], "window_focus_failed")
+
+
+class WindowCloseTests(unittest.TestCase):
+    @patch("ui_tests.support.window_setup.time.sleep")
+    @patch("ui_tests.support.window_setup.time.time", side_effect=[0, 0, 1, 2])
+    @patch(
+        "ui_tests.support.window_setup.find_ibapda_window_handle",
+        side_effect=[123, 123, 123, None],
+    )
+    @patch("ui_tests.support.window_setup.ctypes")
+    def test_close_waits_until_window_disappears(
+        self, ctypes_module, find_window, _time, sleep
+    ):
+        user32 = Mock()
+        ctypes_module.windll.user32 = user32
+
+        result = close_existing_ibapda_window_and_confirm()
+
+        self.assertTrue(result)
+        user32.PostMessageW.assert_called_once_with(123, 0x0010, 0, 0)
+        self.assertEqual(find_window.call_count, 4)
+        sleep.assert_called_with(0.5)
 
 
 if __name__ == "__main__":

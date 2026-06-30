@@ -1,4 +1,6 @@
 import inspect
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -108,6 +110,23 @@ class AgentConfigTests(unittest.TestCase):
         self.assertEqual(agent.allowed_actions, {"left_click", "terminate"})
         self.assertEqual(agent.max_executed_mouse_actions, 2)
         self.assertEqual(agent.additional_system_prompt, "Application controls")
+
+    @patch("see_think_act_agent.ActionExecutor")
+    @patch("see_think_act_agent.OllamaVisionClient")
+    @patch("see_think_act_agent.ScreenshotCapture")
+    def test_constructor_creates_nested_screenshot_directory(
+        self, screenshot_capture, _ollama_client, _action_executor
+    ):
+        screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        with tempfile.TemporaryDirectory(dir=".") as temp_dir:
+            screenshot_dir = Path(temp_dir) / "artifacts" / "tf_04" / "preparation"
+
+            SeeThinkActAgent(
+                save_screenshots=True,
+                screenshot_dir=str(screenshot_dir),
+            )
+
+            self.assertTrue(screenshot_dir.is_dir())
 
 
 if __name__ == "__main__":

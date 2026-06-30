@@ -76,6 +76,37 @@ class HtmlRunReport:
         except (TypeError, ValueError):
             return ""
 
+    @staticmethod
+    def _format_nanoseconds(value: Any) -> str:
+        try:
+            return f"{float(value) / 1_000_000_000:.2f} s"
+        except (TypeError, ValueError):
+            return ""
+
+    @staticmethod
+    def _number(value: Any) -> int | float:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0
+
+    def _model_usage_summary(self) -> dict[str, int | float]:
+        summary: dict[str, int | float] = {
+            "prompt_eval_count": 0,
+            "eval_count": 0,
+            "total_duration": 0,
+        }
+        for record in self.iterations:
+            response = record.get("response") or {}
+            if not isinstance(response, dict):
+                continue
+            for key in summary:
+                summary[key] += self._number(response.get(key))
+        return summary
+
     def _summary_items(self) -> list[tuple[str, str]]:
         result = self.result or {}
         status = result.get("status", "in progress")
@@ -87,7 +118,8 @@ class HtmlRunReport:
             if self.finished_at is not None
             else "Run in progress"
         )
-        return [
+        usage = self._model_usage_summary()
+        items = [
             ("Status", str(status)),
             ("Success", success_text),
             ("Iterations", str(result.get("iterations", len(self.iterations)))),
@@ -96,6 +128,13 @@ class HtmlRunReport:
             ("Finished", finished),
             ("Report file", self.report_path.name),
         ]
+        if usage["prompt_eval_count"] or usage["eval_count"]:
+            items.extend([
+                ("Input tokens", f"{int(usage['prompt_eval_count'])} tokens"),
+                ("Output tokens", f"{int(usage['eval_count'])} tokens"),
+                ("Model time", self._format_nanoseconds(usage["total_duration"])),
+            ])
+        return items
 
     def _render_summary(self) -> str:
         items = "\n".join(

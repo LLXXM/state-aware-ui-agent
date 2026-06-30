@@ -7,6 +7,8 @@ import time
 from typing import Optional, Tuple
 import logging
 
+import config
+
 # Configure pyautogui
 pyautogui.FAILSAFE = True  # Move mouse to top-left corner to abort
 pyautogui.PAUSE = 0.5  # Small pause between actions
@@ -227,7 +229,7 @@ class ActionExecutor:
             self.logger.error(f"Error horizontal scrolling: {e}")
             return False
     
-    def drag(self, x: int, y: int, duration: float = 0.5) -> bool:
+    def drag(self, x: int, y: int, duration: float = config.DRAG_DURATION) -> bool:
         """
         Drag mouse to specified coordinates
         
@@ -310,8 +312,14 @@ class ActionExecutor:
             return self.click_normalized(coordinate[0], coordinate[1], button='left', clicks=1)
         
         elif action_type == 'left_click_drag':
+            start_pixels = self._normalized_to_pixels(args.get('start_coordinate'))
+            if start_pixels is None:
+                return False
             pixels = self._normalized_to_pixels(args.get('coordinate'))
             if pixels is None:
+                return False
+            start_x, start_y = start_pixels
+            if not self.move_mouse(start_x, start_y):
                 return False
             x, y = pixels
             return self.drag(x, y)

@@ -41,6 +41,56 @@ actions, optional UI context, limits, and whether ibaPDA cleanup is required.
 Tests that do not activate Data Recording use the same runner and simply omit
 recording actions from their task.
 
+## Configure A UI Test Run
+
+Most run behavior is configured on the `UiTestCase` object in
+`ui_tests/test_cases/tf_XX.py`. Defaults come from `config.py`.
+
+Common fields:
+
+- `task`: The main instruction executed by the agent.
+- `prepare_task`: Optional preparation instruction. If set, the runner executes
+  preparation once and then runs `task` as measured repetitions. If `None`, the
+  runner executes `task` directly once.
+- `measurement_repetitions`: Number of measured `task` runs after a successful
+  `prepare_task`.
+- `additional_system_prompt`: Extra UI context, usually from `ui_contexts.py`.
+- `allowed_actions`: Actions allowed for this test case. Use this to restrict
+  risky or irrelevant tools per TF case.
+- `max_iterations`: Maximum agent iterations per agent run.
+- `max_task_duration`: Maximum runtime in seconds per agent run.
+- `max_repeated_actions`: Blocks repeated identical actions.
+- `max_consecutive_failures`: Stops after repeated failed actions.
+- `max_executed_mouse_actions`: Optional cap for executed mouse actions.
+- `verify_mouse_targets`: If true, proposed mouse targets are visually verified
+  before execution.
+- `abort_on_mouse_verification_failure`: If true, a failed mouse verification
+  aborts the run. If false, the rejection is returned to the agent as feedback.
+- `iteration_delay`: Delay in seconds after each iteration.
+- `post_action_delay`: Delay in seconds after executed mouse actions.
+- `model_options`: Ollama options for this case, for example `temperature`,
+  `num_ctx`, and `num_predict`.
+
+Window and cleanup fields:
+
+- `cleanup_ibapda_before`: If true, the runner closes an existing ibaPDA window
+  before the test starts.
+- `cleanup_ibapda_after`: If true, the runner closes ibaPDA after the workflow.
+- `minimize_windows_before`: If true, the runner uses `Win+M` before the
+  workflow. This minimizes all windows, including an already open ibaPDA.
+- `minimize_vscode_before`: If true, the runner minimizes visible Visual Studio
+  Code windows only and leaves ibaPDA untouched. Use this for special manual
+  starts where ibaPDA is already open and should remain visible.
+
+Typical modes:
+
+- Standard automated mode:
+  `prepare_task=PREPARE_TASK`, `cleanup_ibapda_before=True`,
+  `minimize_windows_before=True`, `minimize_vscode_before=False`.
+- Manual existing-ibaPDA mode:
+  `prepare_task=None`, `cleanup_ibapda_before=False`,
+  `minimize_windows_before=False`, `minimize_vscode_before=True`.
+
 ## Safety
 
 - Move the mouse to the top-left corner to trigger the `pyautogui` failsafe.

@@ -1,8 +1,9 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import config
+from ollama import ResponseError
 from utils.ollama_client import OllamaVisionClient
 
 
@@ -96,6 +97,33 @@ class OllamaVisionClientConnectionTests(unittest.TestCase):
             result["message"]["tool_calls"][0]["function"]["arguments"]["action"],
             "double_click",
         )
+
+    @patch("utils.ollama_client.time.sleep")
+    def test_chat_retries_transient_ollama_errors(self, sleep):
+        client = OllamaVisionClient(model="qwen3.5:397b-cloud")
+        client.client = Mock()
+        client.client.chat.side_effect = [
+            ResponseError("Internal Server Error", 500),
+            {"message": {"content": "OK"}},
+        ]
+
+        result = client.chat(messages=[{"role": "user", "content": "hello"}])
+
+        self.assertEqual(result["message"]["content"], "OK")
+        self.assertEqual(client.client.chat.call_count, 2)
+        sleep.assert_called_once_with(config.OLLAMA_CHAT_RETRY_DELAY)
+
+    @patch("utils.ollama_client.time.sleep")
+    def test_chat_does_not_retry_non_transient_ollama_errors(self, sleep):
+        client = OllamaVisionClient(model="qwen3.5:397b-cloud")
+        client.client = Mock()
+        client.client.chat.side_effect = ResponseError("Forbidden", 403)
+
+        with self.assertRaises(ResponseError):
+            client.chat(messages=[{"role": "user", "content": "hello"}])
+
+        client.client.chat.assert_called_once()
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":

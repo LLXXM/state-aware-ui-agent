@@ -72,7 +72,11 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.agent.ollama_client.parse_computer_use_action.side_effect = [
             {
                 "name": "computer_use",
-                "arguments": {"action": "left_click_drag", "coordinate": [600, 600]},
+                "arguments": {
+                    "action": "left_click_drag",
+                    "start_coordinate": [300, 600],
+                    "coordinate": [600, 600],
+                },
             },
             self._verification("approve", "Crosshair is on the drag target."),
         ]
@@ -93,6 +97,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
                 "name": "computer_use",
                 "arguments": {
                     "action": "left_click_drag",
+                    "start_coordinate": [300, 600],
                     "coordinate": [600, 600],
                     "intent": "Drag GenerateSignal from the signal tree onto the trend curve.",
                 },
