@@ -82,6 +82,17 @@ Window and cleanup fields:
   Code windows only and leaves ibaPDA untouched. Use this for special manual
   starts where ibaPDA is already open and should remain visible.
 
+Report output:
+
+- By default, UI test reports are written next to the test-case scripts under
+  `ui_tests/test_cases/Reports_Masterarbeit/<tf_xx>/...`.
+- The older `ui_tests/test_cases/Reports/...` folder is left untouched, so old
+  exploratory runs and new master-thesis runs stay separated.
+- Change `config.TEST_CASE_REPORTS_DIR_NAME` to use another default report
+  folder name.
+- Use `--report-dir <path>` when starting a single run if a one-off custom
+  report path is needed.
+
 Typical modes:
 
 - Standard automated mode:

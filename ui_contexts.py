@@ -97,15 +97,18 @@ Tooltips:
   target control.
 
 Mouse target verification overlays:
-- Planned mouse-target screenshots may contain a red crosshair and a white label
-  describing the proposed action. The crosshair and label can cover UI text,
-  icons, borders, or parts of the intended control.
+- Mouse-target verification screenshots contain one red crosshair marker for the
+  exact point currently being verified.
+- Drag actions are verified in two separate screenshots: first one red marker
+  for the drag start/source point, then one red marker for the final drop
+  target. Judge only the single red marker shown in the current verification
+  screenshot.
 - When interpreting these overlay screenshots, account for the possibility that
   the marker itself hides content underneath. Judge the center of the crosshair
   together with the surrounding layout and nearby UI geometry.
-- Only the center point/dot of the crosshair is the target. The red line arms
-  are visual guides and must not be treated as the click, hover, or drag-start
-  location.
+- Only the center point/dot of each crosshair is the target. The line arms are
+  visual guides and must not be treated as the click, hover, drag-start, or
+  drag-end location.
 """
 
 
@@ -116,6 +119,15 @@ Data Recording controls:
 - GO is directly to the left of STOP.
 - The GO/STOP pair is grouped between a two-person icon on its left and gear
   icons on its right.
+- To identify the Data Recording pair, locate STOP first when possible because
+  the red STOP button is visually more unique than GO. The button group is:
+  green/black two-person/user icon, GO, STOP, then the black/green
+  client-preferences gear.
+- GO and STOP remain in the same fixed positions; only their fill colors change
+  while the stable white 'GO'/'STOP' text remains. Use the fill colors only to
+  determine the recording state.
+- Stopped state: GO is a fully filled green circle with white 'GO' text and STOP
+  is gray. Running state: GO changes to gray and STOP changes to red.
 - When clicking GO or STOP, target the center of the filled circular text button
   itself. For STOP, click the center of the red circle containing the
   white 'STOP' text. Do not click the gear icons or client preferences controls
@@ -155,7 +167,10 @@ Data Recording states:
 
 View controls, not Data Recording:
 - 'Ansichten starten' is a separate outlined green circle containing a green
-  triangle/play symbol. It has an outlined gray circular pause button beside it.
+  triangle/play symbol. Its interior around the play symbol is white, the
+  triangle is green, not white, and the button is not filled solid green.
+- The outlined gray pause button immediately to its right is black-outlined,
+  white-filled, and contains two black vertical pause bars.
 - 'Ansichten starten' and its pause control do not operate Data Recording.
 - For a Data Recording task, select only the filled, text-labeled GO/STOP pair.
   Never select a triangle/play-symbol button as Data Recording GO.
@@ -164,6 +179,11 @@ Confirmation dialogs:
 - After clicking GO or STOP, a confirmation dialog or window may appear.
 - A window titled 'Erfassung wird gestartet' means that the GO action has
   already initiated the start procedure; it is not evidence that GO failed.
+- Treat this dialog as positive evidence that the GO button was clicked
+  correctly.
+- If the dialog contains an OK button that is initially disabled, wait until OK
+  becomes enabled/clickable and shows a blue focus/outline frame before clicking
+  it.
 - If no start dialog appears within about 3 seconds and Data Recording does not
   become active, treat the GO click as not clearly accepted and choose a
   corrected next action based on the current screenshot. Do not repeat the exact
@@ -690,6 +710,10 @@ Property dialogs and signal dropdowns:
 - Signal selection controls in these dialogs are proprietary dropdowns with a
   visible closed text field. Open the signal dropdown by clicking the visible
   text of the closed dropdown field.
+- In the digital numeric display and digital text display property dialogs, the
+  signal-selection dropdown to configure is named 'Datensignal'. Use that
+  Datensignal field for the signal assignment and do not change unrelated signal
+  fields.
 - Click vertically centered inside the visible closed dropdown text field. Do
   not click above, below, or just beside the field; imprecise clicks may do
   nothing.
@@ -762,9 +786,10 @@ Signal tree for trend curve assignment:
 - Design mode must be exited before assigning the signal to the trend curve.
 - Use mouse_move to position the pointer on the GenerateSignal entry in the
   signal tree first, then use left_click_drag to drag to the absolute target
-  position inside the trend curve element. During mouse-target verification,
-  the red crosshair for this drag must appear over the trend curve destination,
-  not over the Signalbaum source.
+  position inside the trend curve element. During drag verification, first
+  approve the source screenshot only if its red marker is on GenerateSignal in
+  the Signalbaum; then approve the target screenshot only if its red marker is
+  inside the trend curve destination, not over the Signalbaum source.
 
 Runtime validation:
 - After creating and configuring all three elements, exit design mode.

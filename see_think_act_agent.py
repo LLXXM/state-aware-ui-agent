@@ -235,24 +235,22 @@ class SeeThinkActAgent:
         gap = radius
         arm = radius + 3
         draw = ImageDraw.Draw(overlay)
-        color = (255, 0, 0)
-        draw.ellipse((x - 3, y - 3, x + 3, y + 3), fill=color)
-        draw.line((x - arm, y, x - gap, y), fill=color, width=2)
-        draw.line((x + gap, y, x + arm, y), fill=color, width=2)
-        draw.line((x, y - arm, x, y - gap), fill=color, width=2)
-        draw.line((x, y + gap, x, y + arm), fill=color, width=2)
 
-        label = (
-            f"CENTER target: {arguments['action']} normalized={coordinate} pixels=({x}, {y})"
-        )
-        text_box = draw.textbbox((0, 0), label)
-        label_x = max(0, min(x + radius + 8, overlay.width - text_box[2] - 8))
-        label_y = max(0, min(y + radius + 8, overlay.height - text_box[3] - 8))
-        draw.rectangle(
-            (label_x - 4, label_y - 4, label_x + text_box[2] + 4, label_y + text_box[3] + 4),
-            fill=(255, 255, 255),
-        )
-        draw.text((label_x, label_y), label, fill=color)
+        def draw_crosshair(cx: int, cy: int, color):
+            draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=color)
+            draw.line((cx - arm, cy, cx - gap, cy), fill=color, width=2)
+            draw.line((cx + gap, cy, cx + arm, cy), fill=color, width=2)
+            draw.line((cx, cy - arm, cx, cy - gap), fill=color, width=2)
+            draw.line((cx, cy + gap, cx, cy + arm), fill=color, width=2)
+
+        if arguments.get("action") == "left_click_drag" and arguments.get("start_coordinate"):
+            start_coordinate = arguments["start_coordinate"]
+            start_x = int((start_coordinate[0] / 1000.0) * overlay.width)
+            start_y = int((start_coordinate[1] / 1000.0) * overlay.height)
+            draw_crosshair(start_x, start_y, (0, 80, 255))
+
+        draw_crosshair(x, y, (255, 0, 0))
+
         return overlay
 
     def _save_action_overlay(self, arguments: Dict[str, Any]) -> Optional[str]:
@@ -317,57 +315,8 @@ class SeeThinkActAgent:
             return intent.strip()
         return None
 
-    def _verify_mouse_target(
-        self, arguments: Dict[str, Any], action_intent: str = ""
-    ) -> bool:
-        """Ask the model to verify a marked target before a real mouse action."""
-        overlay = self._render_action_overlay(arguments)
-        if overlay is None:
-            self.last_mouse_verification = {
-                "decision": "reject",
-                "reason": "No marked screenshot could be rendered.",
-            }
-            return False
-
-        prompt = (
-            "You are verifying a proposed desktop mouse action before it is executed. "
-            f"The user's task is: {getattr(self, 'current_task', '')!r}. "
-            f"The requested action is {arguments['action']!r}. "
-            f"The planning model's intended target is described as: {action_intent or 'not supplied'!r}. "
-            "The red center dot of the crosshair in the image is the exact click "
-            "or pointer target; the short red arms are only visual guides and are "
-            "not the target. "
-            "The crosshair and its white action label may cover underlying UI text "
-            "or controls; account for that possible occlusion when judging the target. "
-            f"Prior action history is: {self._format_action_history() or 'none'}. "
-            "Verify the marked target against the planning model's intended target; "
-            "do not choose a different next action. Use verify_mouse_target with "
-            "decision='approve' only if the red center dot is clearly "
-            "on that intended UI element. "
-            "If it is misplaced, ambiguous, or unsafe, use decision='reject'."
-        )
-        if arguments.get("action") == "mouse_move":
-            prompt += (
-                " This is a hover/mouse_move verification. Existing hover highlights "
-                "or tooltips in the screenshot may still belong to the previous mouse "
-                "position and may not match the red crosshair yet. Do not reject a "
-                "mouse_move solely because a different nearby button is still highlighted; "
-                "verify whether the red center dot itself is on the intended future "
-                "hover target. If the mouse_move prepares a later drag from a tree "
-                "row or text item, approve only when the red center dot is vertically "
-                "centered on the intended source row/text, not on its upper edge, "
-                "neighbor row, or pane title."
-            )
-        if arguments.get("action") == "left_click_drag":
-            prompt += (
-                " This is a drag verification. The red crosshair marks the final drop "
-                "target of the drag, not the source item where the drag starts. "
-                "Approve only if the crosshair is on the intended destination/drop "
-                "area described by the action intent. If the crosshair is on the "
-                "source item, source tree, source list, or any other non-destination "
-                "area, reject it and explain that the drag target is the wrong end "
-                "of the drag."
-            )
+    def _run_mouse_target_verification(self, prompt: str, overlay) -> Dict[str, Any]:
+        """Run the structured verifier for one marked screenshot."""
         response = self.ollama_client.chat_with_image(
             user_query=prompt,
             image=overlay,
@@ -378,37 +327,179 @@ class SeeThinkActAgent:
         )
         tool_call = self.ollama_client.parse_computer_use_action(response)
         if not tool_call:
-            verification = {
+            return {
                 "decision": "reject",
                 "reason": "No structured target verification was returned.",
             }
+
+        if 'function' in tool_call:
+            details = tool_call['function']
+            name = details.get('name')
+            verification = details.get('arguments', {})
         else:
-            if 'function' in tool_call:
-                details = tool_call['function']
-                name = details.get('name')
-                verification = details.get('arguments', {})
-            else:
-                name = tool_call.get('name')
-                verification = tool_call.get('arguments', {})
+            name = tool_call.get('name')
+            verification = tool_call.get('arguments', {})
 
-            if isinstance(verification, str):
-                try:
-                    verification = json.loads(verification)
-                except json.JSONDecodeError:
-                    verification = {}
+        if isinstance(verification, str):
+            try:
+                verification = json.loads(verification)
+            except json.JSONDecodeError:
+                verification = {}
 
-            if name != "verify_mouse_target" or not isinstance(verification, dict):
-                verification = {
+        if name != "verify_mouse_target" or not isinstance(verification, dict):
+            return {
+                "decision": "reject",
+                "reason": "Unexpected target verification response.",
+            }
+        if verification.get("decision") not in {"approve", "reject"}:
+            return {
+                "decision": "reject",
+                "reason": "Target verification omitted a valid decision.",
+            }
+        if not isinstance(verification.get("reason"), str):
+            verification["reason"] = "No verification reason supplied."
+        return verification
+
+    def _mouse_verification_prompt(
+        self,
+        arguments: Dict[str, Any],
+        action_intent: str,
+        extra_instruction: str = "",
+    ) -> str:
+        """Build the prompt for one marked mouse-target verification image."""
+        prompt = (
+            "You are verifying a proposed desktop mouse action before it is executed. "
+            f"The user's task is: {getattr(self, 'current_task', '')!r}. "
+            f"The requested action is {arguments['action']!r}. "
+            f"The planning model's intended target is described as: {action_intent or 'not supplied'!r}. "
+            "The red center dot of the crosshair in the image is the exact click, "
+            "pointer, or drag endpoint being verified; the short red arms are "
+            "only visual guides and are not the target. "
+            "A crosshair may cover a small part of underlying UI text or controls; "
+            "account for that possible occlusion when judging the target. "
+            f"Prior action history is: {self._format_action_history() or 'none'}. "
+            "Verify the marked target against the planning model's intended target; "
+            "do not choose a different next action. Use verify_mouse_target with "
+            "decision='approve' only if the red center dot is clearly "
+            "on that intended UI element. "
+            "If it is misplaced, ambiguous, or unsafe, use decision='reject'."
+        )
+        if extra_instruction:
+            prompt += " " + extra_instruction
+        return prompt
+
+    def _verify_mouse_target(
+        self, arguments: Dict[str, Any], action_intent: str = ""
+    ) -> bool:
+        """Ask the model to verify a marked target before a real mouse action."""
+        if arguments.get("action") == "left_click_drag" and arguments.get("start_coordinate"):
+            source_arguments = dict(arguments)
+            source_arguments["action"] = "mouse_move"
+            source_arguments["coordinate"] = arguments["start_coordinate"]
+            source_overlay = self._render_action_overlay(source_arguments)
+            target_arguments = dict(arguments)
+            target_arguments["action"] = "mouse_move"
+            target_overlay = self._render_action_overlay(target_arguments)
+
+            if source_overlay is None or target_overlay is None:
+                self.last_mouse_verification = {
                     "decision": "reject",
-                    "reason": "Unexpected target verification response.",
+                    "reason": "No marked drag verification screenshot could be rendered.",
                 }
-            elif verification.get("decision") not in {"approve", "reject"}:
-                verification = {
+                return False
+
+            source_prompt = self._mouse_verification_prompt(
+                arguments,
+                action_intent,
+                (
+                    "This is drag verification step 1 of 2: verify only the drag "
+                    "start/source point from start_coordinate. Approve only if the "
+                    "red center dot is on the intended source item, source row, or "
+                    "source text described by the action intent."
+                ),
+            )
+            source_verification = self._run_mouse_target_verification(
+                source_prompt, source_overlay
+            )
+            if source_verification["decision"] != "approve":
+                self.last_mouse_verification = {
                     "decision": "reject",
-                    "reason": "Target verification omitted a valid decision.",
+                    "reason": (
+                        "Drag source rejected: "
+                        f"{source_verification.get('reason', 'No reason supplied.')}"
+                    ),
+                    "source": source_verification,
                 }
-            elif not isinstance(verification.get("reason"), str):
-                verification["reason"] = "No verification reason supplied."
+                self.logger.info(
+                    f"Mouse target verification: {self.last_mouse_verification}"
+                )
+                return False
+
+            target_prompt = self._mouse_verification_prompt(
+                arguments,
+                action_intent,
+                (
+                    "This is drag verification step 2 of 2: verify only the final "
+                    "drop target from coordinate. Approve only if the red center "
+                    "dot is on the intended destination/drop area described by the "
+                    "action intent. If it is still on the source item, source tree, "
+                    "or source list, reject it."
+                ),
+            )
+            target_verification = self._run_mouse_target_verification(
+                target_prompt, target_overlay
+            )
+            if target_verification["decision"] != "approve":
+                self.last_mouse_verification = {
+                    "decision": "reject",
+                    "reason": (
+                        "Drag target rejected: "
+                        f"{target_verification.get('reason', 'No reason supplied.')}"
+                    ),
+                    "source": source_verification,
+                    "target": target_verification,
+                }
+                self.logger.info(
+                    f"Mouse target verification: {self.last_mouse_verification}"
+                )
+                return False
+
+            self.last_mouse_verification = {
+                "decision": "approve",
+                "reason": "Drag source and target approved.",
+                "source": source_verification,
+                "target": target_verification,
+            }
+            self.logger.info(
+                f"Mouse target verification: {self.last_mouse_verification}"
+            )
+            return True
+
+        overlay = self._render_action_overlay(arguments)
+        if overlay is None:
+            self.last_mouse_verification = {
+                "decision": "reject",
+                "reason": "No marked screenshot could be rendered.",
+            }
+            return False
+
+        extra_instruction = ""
+        if arguments.get("action") == "mouse_move":
+            extra_instruction = (
+                " This is a hover/mouse_move verification. Existing hover highlights "
+                "or tooltips in the screenshot may still belong to the previous mouse "
+                "position and may not match the red crosshair yet. Do not reject a "
+                "mouse_move solely because a different nearby button is still highlighted; "
+                "verify whether the red center dot itself is on the intended future "
+                "hover target. If the mouse_move prepares a later drag from a tree "
+                "row or text item, approve only when the red center dot is vertically "
+                "centered on the intended source row/text, not on its upper edge, "
+                "neighbor row, or pane title."
+            )
+        prompt = self._mouse_verification_prompt(
+            arguments, action_intent, extra_instruction
+        )
+        verification = self._run_mouse_target_verification(prompt, overlay)
 
         self.last_mouse_verification = verification
         self.logger.info(f"Mouse target verification: {verification}")

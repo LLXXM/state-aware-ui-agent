@@ -78,6 +78,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
                     "coordinate": [600, 600],
                 },
             },
+            self._verification("approve", "Crosshair is on the drag source."),
             self._verification("approve", "Crosshair is on the drag target."),
         ]
         self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
@@ -86,7 +87,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(self.agent.last_mouse_verification["decision"], "approve")
-        self.agent.ollama_client.chat_with_image.assert_called_once()
+        self.assertEqual(self.agent.ollama_client.chat_with_image.call_count, 2)
         self.agent.action_executor.execute_computer_use_action.assert_called_once()
         sleep.assert_called_once_with(0.1)
 
@@ -102,6 +103,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
                     "intent": "Drag GenerateSignal from the signal tree onto the trend curve.",
                 },
             },
+            self._verification("approve", "Crosshair is on GenerateSignal."),
             self._verification("approve", "Crosshair is on the trend curve."),
         ]
         self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
@@ -109,13 +111,18 @@ class AgentMouseVerificationTests(unittest.TestCase):
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
+        source_prompt = self.agent.ollama_client.chat_with_image.call_args_list[0].kwargs[
             "user_query"
         ]
-        self.assertIn("final drop target", prompt)
-        self.assertIn("not the source item", prompt)
-        self.assertIn("source tree", prompt)
-        self.assertIn("wrong end of the drag", prompt)
+        target_prompt = self.agent.ollama_client.chat_with_image.call_args_list[1].kwargs[
+            "user_query"
+        ]
+        self.assertIn("drag verification step 1 of 2", source_prompt)
+        self.assertIn("start/source point", source_prompt)
+        self.assertIn("intended source item", source_prompt)
+        self.assertIn("drag verification step 2 of 2", target_prompt)
+        self.assertIn("final drop target", target_prompt)
+        self.assertIn("intended destination/drop area", target_prompt)
 
     @patch("see_think_act_agent.time.sleep")
     def test_approved_mouse_target_is_executed(self, sleep):
@@ -232,7 +239,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
         prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
             "user_query"
         ]
-        self.assertIn("white action label may cover", prompt)
+        self.assertIn("A crosshair may cover", prompt)
         self.assertIn("possible occlusion", prompt)
         self.assertIn("red center dot", prompt)
         self.assertIn("short red arms are only visual guides", prompt)

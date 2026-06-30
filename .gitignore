@@ -26,3 +26,4 @@ Thumbs.db
 
 # Test case specific ignores
 ui_tests/test_cases/Reports/    
+ui_tests/test_cases/Reports_Masterarbeit/

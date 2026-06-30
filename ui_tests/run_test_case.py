@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import config
 from see_think_act_agent import SeeThinkActAgent
 from ui_tests.support.ibapda_cleanup import ensure_ibapda_closed
 from ui_tests.test_cases import UiTestCase
@@ -45,7 +46,12 @@ def default_report_dir_for_case(case: UiTestCase) -> str:
     except ModuleNotFoundError:
         test_case_dir = Path(__file__).parent / "test_cases"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return str(test_case_dir / "Reports" / module_name / f"{module_name}_{timestamp}")
+    return str(
+        test_case_dir
+        / config.TEST_CASE_REPORTS_DIR_NAME
+        / module_name
+        / f"{module_name}_{timestamp}"
+    )
 
 
 def _build_agent(case: UiTestCase, artifact_dir: str, report_dir: str) -> SeeThinkActAgent:
