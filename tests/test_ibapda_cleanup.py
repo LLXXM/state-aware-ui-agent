@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from ui_contexts import IBAPDA_UI_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_UI_CONTEXT
 from ui_tests.support.ibapda_cleanup import ensure_ibapda_closed
 from ui_tests.support.window_setup import close_existing_ibapda_window_and_confirm
 

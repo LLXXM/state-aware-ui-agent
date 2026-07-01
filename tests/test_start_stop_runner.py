@@ -3,13 +3,13 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import config
-from ui_contexts import IBAPDA_UI_CONTEXT
-from ui_contexts import IBAPDA_TF_01_LAYOUT_CONTEXT
-from ui_contexts import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
-from ui_contexts import IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
-from ui_contexts import IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT
-from ui_contexts import IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT
-from ui_contexts import IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_UI_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_01_LAYOUT_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_05_DESIGN_CONFIGURATION_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT
 from ui_tests.run_test_case import default_report_dir_for_case, load_test_case, run_test_case
 from ui_tests.test_cases import UiTestCase
 

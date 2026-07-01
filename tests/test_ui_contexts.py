@@ -1,6 +1,6 @@
 import unittest
 
-from ui_contexts import (
+from ui_tests.contexts.ibapda import (
     IBAPDA_BASE_CONTEXT,
     IBAPDA_PROJECT_OPEN_CONTEXT,
     IBAPDA_TF_01_LAYOUT_CONTEXT,

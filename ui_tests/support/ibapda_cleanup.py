@@ -1,7 +1,7 @@
 """Bring an existing ibaPDA instance to a safe stopped and closed state."""
 
 from see_think_act_agent import SeeThinkActAgent
-from ui_contexts import IBAPDA_UI_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_UI_CONTEXT
 from ui_tests.support.window_setup import (
     close_existing_ibapda_window_and_confirm,
     find_ibapda_window_handle,

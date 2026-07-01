@@ -10,9 +10,9 @@ verifies mouse targets, and records self-contained HTML reports for each run.
 Computer-Use-Agent/
   see_think_act_agent.py       Core see-think-act loop
   config.py                    Runtime and safety defaults
-  ui_contexts.py               ibaPDA-specific visual knowledge
   utils/                       Ollama client and action execution
   ui_tests/
+    contexts/                  Application-specific UI context prompts
     run_test_case.py           Single test-case runner
     test_cases/                Executable test-case definitions
       tf_00.py                 Data Recording start/stop cycle
@@ -42,6 +42,10 @@ actions, optional UI context, limits, and whether ibaPDA cleanup is required.
 Tests that do not activate Data Recording use the same runner and simply omit
 recording actions from their task.
 
+See the README files in `utils/`, `ui_tests/`, `ui_tests/contexts/`,
+`ui_tests/test_cases/`, `ui_tests/support/`, and `tests/` for folder-level
+module overviews.
+
 ## Configure A UI Test Run
 
 Most run behavior is configured on the `UiTestCase` object in
@@ -55,7 +59,8 @@ Common fields:
   runner executes `task` directly once.
 - `measurement_repetitions`: Number of measured `task` runs after a successful
   `prepare_task`.
-- `additional_system_prompt`: Extra UI context, usually from `ui_contexts.py`.
+- `additional_system_prompt`: Extra UI context, usually from
+  `ui_tests/contexts/ibapda.py`.
 - `allowed_actions`: Actions allowed for this test case. Use this to restrict
   risky or irrelevant tools per TF case.
 - `max_iterations`: Maximum agent iterations per agent run.

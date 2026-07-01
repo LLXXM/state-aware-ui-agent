@@ -10,12 +10,12 @@ venv/
 # Environment variables
 .env
 
-# Logs and generated artifacts
-logs/
-reports/
-screenshots/
-agent_screenshots/
-artifacts/ui_tests/
+# Standalone agent output from config.py defaults
+/Reports/
+/agent_screenshots/
+
+# Legacy/standalone cleanup screenshots
+/artifacts/ui_tests/
 
 # VS Code
 .vscode/
@@ -24,6 +24,3 @@ artifacts/ui_tests/
 .DS_Store
 Thumbs.db
 
-# Test case specific ignores
-ui_tests/test_cases/Reports/    
-ui_tests/test_cases/Reports_Masterarbeit/
