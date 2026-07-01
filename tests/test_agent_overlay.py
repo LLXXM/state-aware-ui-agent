@@ -46,6 +46,7 @@ class AgentOverlayTests(unittest.TestCase):
         with Image.open(overlay_path) as overlay:
             self.assertEqual(overlay.getpixel((500, 500)), (255, 0, 0))
             self.assertEqual(overlay.getpixel((505, 505)), (255, 255, 255))
+            self.assertEqual(overlay.getpixel((509, 500)), (255, 255, 255))
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_non_mouse_action_does_not_save_overlay(self):

@@ -1,7 +1,7 @@
 """Bring an existing ibaPDA instance to a safe stopped and closed state."""
 
 from see_think_act_agent import SeeThinkActAgent
-from ui_contexts import IBAPDA_UI_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_UI_CONTEXT
 from ui_tests.support.window_setup import (
     close_existing_ibapda_window_and_confirm,
     find_ibapda_window_handle,
@@ -33,6 +33,7 @@ Safety restrictions:
 def ensure_ibapda_closed(
     screenshot_dir: str = "artifacts/ui_tests/ensure_ibapda_closed",
     check_connection: bool = True,
+    report_dir: str | None = None,
 ) -> dict:
     """Stop recording if necessary and close an existing ibaPDA client window."""
     if find_ibapda_window_handle() is None:
@@ -62,6 +63,7 @@ def ensure_ibapda_closed(
         max_consecutive_failures=2,
         allowed_actions={"left_click", "wait", "checkpoint", "terminate"},
         max_executed_mouse_actions=2,
+        report_dir=report_dir,
         additional_system_prompt=IBAPDA_UI_CONTEXT,
     )
 

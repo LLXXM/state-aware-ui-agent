@@ -4,15 +4,18 @@ import argparse
 import importlib
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import config
 from see_think_act_agent import SeeThinkActAgent
 from ui_tests.support.ibapda_cleanup import ensure_ibapda_closed
 from ui_tests.test_cases import UiTestCase
 from ui_tests.support.window_setup import (
     minimize_all_windows_for_test,
+    minimize_vscode_windows_for_test,
     restore_minimized_windows_after_test,
 )
 
@@ -35,7 +38,7 @@ def _not_required_result(message: str) -> dict[str, Any]:
 
 
 def default_report_dir_for_case(case: UiTestCase) -> str:
-    """Return a timestamped report directory next to the test case module."""
+    """Return a timestamped report directory grouped by test case module."""
     module_name = case.case_id.lower().replace("-", "_")
     try:
         module = importlib.import_module(f"ui_tests.test_cases.{module_name}")
@@ -43,17 +46,130 @@ def default_report_dir_for_case(case: UiTestCase) -> str:
     except ModuleNotFoundError:
         test_case_dir = Path(__file__).parent / "test_cases"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return str(test_case_dir / "Reports" / f"{module_name}_{timestamp}")
+    return str(
+        test_case_dir
+        / config.TEST_CASE_REPORTS_DIR_NAME
+        / module_name
+        / f"{module_name}_{timestamp}"
+    )
+
+
+def _screenshots_dir_for_report(report_dir: str | Path) -> str:
+    return str(Path(report_dir) / "screenshots")
+
+
+def _build_agent(case: UiTestCase, report_dir: str) -> SeeThinkActAgent:
+    return SeeThinkActAgent(
+        dry_run=False,
+        max_iterations=case.max_iterations,
+        save_screenshots=True,
+        screenshot_dir=_screenshots_dir_for_report(report_dir),
+        max_task_duration=case.max_task_duration,
+        max_repeated_actions=case.max_repeated_actions,
+        max_consecutive_failures=case.max_consecutive_failures,
+        iteration_delay=case.iteration_delay,
+        post_action_delay=case.post_action_delay,
+        allowed_actions=(
+            None if case.allowed_actions is None else set(case.allowed_actions)
+        ),
+        max_executed_mouse_actions=case.max_executed_mouse_actions,
+        verify_mouse_targets=case.verify_mouse_targets,
+        abort_on_mouse_verification_failure=case.abort_on_mouse_verification_failure,
+        save_action_overlays=case.save_action_overlays,
+        model_options=case.model_options,
+        report_dir=report_dir,
+        additional_system_prompt=case.additional_system_prompt,
+    )
+
+
+def _run_case_workflow(
+    case: UiTestCase,
+    report_dir: str,
+) -> dict[str, Any]:
+    if not case.prepare_task:
+        agent = _build_agent(case, report_dir)
+        if not agent.ollama_client.test_connection():
+            return {
+                "success": False,
+                "status": "connection_failed",
+                "message": "Ollama is unavailable or the configured model is missing.",
+            }
+        return agent.run(case.task)
+
+    report_base = Path(report_dir)
+    preparation_agent = _build_agent(
+        case,
+        str(report_base / "preparation"),
+    )
+    if not preparation_agent.ollama_client.test_connection():
+        return {
+            "success": False,
+            "status": "connection_failed",
+            "message": "Ollama is unavailable or the configured model is missing.",
+        }
+
+    preparation = preparation_agent.run(case.prepare_task)
+    if preparation.get("status") != "success":
+        return {
+            "success": False,
+            "status": "preparation_failed",
+            "message": "The configured preparation task did not complete successfully.",
+            "preparation": preparation,
+            "measurement_repetitions": case.measurement_repetitions,
+            "measurement_runs": [],
+        }
+
+    measurement_runs = []
+    repetitions = max(1, case.measurement_repetitions)
+    for run_index in range(1, repetitions + 1):
+        run_label = f"measurement_run_{run_index:02d}"
+        run_agent = _build_agent(
+            case,
+            str(report_base / run_label),
+        )
+        started_at = datetime.now().isoformat(timespec="seconds")
+        started = time.perf_counter()
+        run_result = run_agent.run(case.task)
+        measured_elapsed = time.perf_counter() - started
+        run_result["measurement_run"] = run_index
+        run_result["measured_started_at"] = started_at
+        run_result["measured_finished_at"] = datetime.now().isoformat(timespec="seconds")
+        run_result["measured_elapsed_time"] = measured_elapsed
+        run_report = vars(run_agent).get("report")
+        if run_report is not None:
+            run_report.finish(run_result)
+        measurement_runs.append(run_result)
+        if run_result.get("status") != "success":
+            break
+
+    measurement_succeeded = (
+        len(measurement_runs) == repetitions
+        and all(run.get("status") == "success" for run in measurement_runs)
+    )
+    return {
+        "success": measurement_succeeded,
+        "status": "success" if measurement_succeeded else "measurement_failed",
+        "message": (
+            f"Completed {len(measurement_runs)} of {repetitions} configured measurement runs."
+        ),
+        "preparation": preparation,
+        "measurement_repetitions": repetitions,
+        "measurement_runs": measurement_runs,
+        "iterations": sum(run.get("iterations", 0) for run in measurement_runs),
+        "elapsed_time": sum(run.get("measured_elapsed_time", 0.0) for run in measurement_runs),
+    }
 
 
 def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[str, Any]:
     """Execute one test case using optional generic ibaPDA safety boundaries."""
-    artifact_dir = f"artifacts/ui_tests/{case.case_id.lower().replace('-', '_')}"
     report_dir = report_dir or default_report_dir_for_case(case)
+    report_base = Path(report_dir)
 
     if case.cleanup_ibapda_before:
+        pre_cleanup_report_dir = str(report_base / "pre_cleanup")
         pre_cleanup = ensure_ibapda_closed(
-            screenshot_dir=f"{artifact_dir}/pre_cleanup"
+            screenshot_dir=_screenshots_dir_for_report(pre_cleanup_report_dir),
+            report_dir=pre_cleanup_report_dir,
         )
     else:
         pre_cleanup = _not_required_result("No ibaPDA pre-cleanup configured.")
@@ -67,47 +183,19 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
             "pre_cleanup": pre_cleanup,
         }
 
-    agent = SeeThinkActAgent(
-        dry_run=False,
-        max_iterations=case.max_iterations,
-        save_screenshots=True,
-        screenshot_dir=artifact_dir,
-        max_task_duration=case.max_task_duration,
-        max_repeated_actions=case.max_repeated_actions,
-        max_consecutive_failures=case.max_consecutive_failures,
-        iteration_delay=case.iteration_delay,
-        post_action_delay=case.post_action_delay,
-        allowed_actions=set(case.allowed_actions),
-        max_executed_mouse_actions=case.max_executed_mouse_actions,
-        verify_mouse_targets=case.verify_mouse_targets,
-        save_action_overlays=case.save_action_overlays,
-        model_options=case.model_options,
-        report_dir=report_dir,
-        additional_system_prompt=case.additional_system_prompt,
-    )
-
-    if not agent.ollama_client.test_connection():
-        return {
-            "success": False,
-            "status": "connection_failed",
-            "message": "Ollama is unavailable or the configured model is missing.",
-            "test_case": case.case_id,
-            "pre_cleanup": pre_cleanup,
-            "report_dir": report_dir,
-        }
-
     print(f"Starting UI test case {case.case_id}: {case.description}")
     print("Move the mouse to the top-left corner to trigger pyautogui failsafe.")
-    print(f"Screenshots are stored in {artifact_dir}.")
-    print(f"HTML report will be written to {report_dir}.")
+    print(f"HTML reports and screenshots will be written to {report_dir}.")
 
     workflow: dict[str, Any]
     post_cleanup: dict[str, Any]
     if case.minimize_windows_before:
         minimize_all_windows_for_test()
+    elif case.minimize_vscode_before:
+        minimize_vscode_windows_for_test()
     try:
         try:
-            workflow = agent.run(case.task)
+            workflow = _run_case_workflow(case, report_dir)
         except Exception as exc:
             workflow = {
                 "success": False,
@@ -116,9 +204,11 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
             }
 
         if case.cleanup_ibapda_after:
+            post_cleanup_report_dir = str(report_base / "post_cleanup")
             post_cleanup = ensure_ibapda_closed(
-                screenshot_dir=f"{artifact_dir}/post_cleanup",
+                screenshot_dir=_screenshots_dir_for_report(post_cleanup_report_dir),
                 check_connection=False,
+                report_dir=post_cleanup_report_dir,
             )
         else:
             post_cleanup = _not_required_result("No ibaPDA post-cleanup configured.")

@@ -7,6 +7,8 @@ import time
 from typing import Optional, Tuple
 import logging
 
+import config
+
 # Configure pyautogui
 pyautogui.FAILSAFE = True  # Move mouse to top-left corner to abort
 pyautogui.PAUSE = 0.5  # Small pause between actions
@@ -50,6 +52,23 @@ class ActionExecutor:
             return True
         except Exception as e:
             self.logger.error(f"Error clicking: {e}")
+            return False
+
+    def double_click(self, x: int, y: int, button: str = 'left', interval: float = 0.12) -> bool:
+        """
+        Double-click at specified coordinates using an explicit click interval.
+
+        Some native/proprietary Windows controls do not reliably recognize two
+        zero-interval clicks as a double-click.
+        """
+        try:
+            self.logger.info(
+                f"Double-clicking at ({x}, {y}) with {button} button, interval={interval}"
+            )
+            pyautogui.doubleClick(x=x, y=y, button=button, interval=interval)
+            return True
+        except Exception as e:
+            self.logger.error(f"Error double-clicking: {e}")
             return False
     
     def click_relative(self, x_ratio: float, y_ratio: float, 
@@ -210,7 +229,7 @@ class ActionExecutor:
             self.logger.error(f"Error horizontal scrolling: {e}")
             return False
     
-    def drag(self, x: int, y: int, duration: float = 0.5) -> bool:
+    def drag(self, x: int, y: int, duration: float = config.DRAG_DURATION) -> bool:
         """
         Drag mouse to specified coordinates
         
@@ -224,7 +243,7 @@ class ActionExecutor:
         """
         try:
             self.logger.info(f"Dragging to ({x}, {y})")
-            pyautogui.drag(x, y, duration=duration)
+            pyautogui.dragTo(x, y, duration=duration, button='left')
             return True
         except Exception as e:
             self.logger.error(f"Error dragging: {e}")
@@ -293,8 +312,14 @@ class ActionExecutor:
             return self.click_normalized(coordinate[0], coordinate[1], button='left', clicks=1)
         
         elif action_type == 'left_click_drag':
+            start_pixels = self._normalized_to_pixels(args.get('start_coordinate'))
+            if start_pixels is None:
+                return False
             pixels = self._normalized_to_pixels(args.get('coordinate'))
             if pixels is None:
+                return False
+            start_x, start_y = start_pixels
+            if not self.move_mouse(start_x, start_y):
                 return False
             x, y = pixels
             return self.drag(x, y)
@@ -306,10 +331,11 @@ class ActionExecutor:
             return self.click_normalized(coordinate[0], coordinate[1], button='right', clicks=1)
         
         elif action_type == 'double_click':
-            coordinate = args.get('coordinate')
-            if self._normalized_to_pixels(coordinate) is None:
+            pixels = self._normalized_to_pixels(args.get('coordinate'))
+            if pixels is None:
                 return False
-            return self.click_normalized(coordinate[0], coordinate[1], button='left', clicks=2)
+            x, y = pixels
+            return self.double_click(x, y, button='left')
 
         elif action_type == 'triple_click':
             coordinate = args.get('coordinate')

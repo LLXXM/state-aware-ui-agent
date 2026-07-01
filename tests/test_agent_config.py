@@ -1,4 +1,6 @@
 import inspect
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -16,6 +18,9 @@ class AgentConfigTests(unittest.TestCase):
             "save_screenshots": config.SAVE_SCREENSHOTS,
             "save_action_overlays": config.SAVE_ACTION_OVERLAYS,
             "verify_mouse_targets": config.VERIFY_MOUSE_TARGETS,
+            "abort_on_mouse_verification_failure": (
+                config.ABORT_ON_MOUSE_VERIFICATION_FAILURE
+            ),
             "screenshot_dir": config.SCREENSHOT_DIR,
             "log_level": config.LOG_LEVEL,
             "max_task_duration": config.MAX_TASK_DURATION,
@@ -40,6 +45,23 @@ class AgentConfigTests(unittest.TestCase):
         self.assertIn("checkpoint", config.SYSTEM_PROMPT)
         self.assertIn("computer_use", config.SYSTEM_PROMPT)
 
+    def test_prepare_tools_filters_action_enum_to_allowed_actions(self):
+        agent = SeeThinkActAgent.__new__(SeeThinkActAgent)
+        from utils.agent_function_call import ComputerUse
+
+        agent.computer_use = ComputerUse()
+        agent.allowed_actions = {"checkpoint", "terminate"}
+
+        tools = agent._prepare_tools()
+
+        action_enum = tools[0]["function"]["parameters"]["properties"]["action"]["enum"]
+        self.assertEqual(action_enum, ["checkpoint", "terminate"])
+        self.assertNotIn("answer", action_enum)
+        self.assertIn(
+            "only these actions are allowed",
+            tools[0]["function"]["parameters"]["properties"]["action"]["description"],
+        )
+
     @patch("see_think_act_agent.ActionExecutor")
     @patch("see_think_act_agent.OllamaVisionClient")
     @patch("see_think_act_agent.ScreenshotCapture")
@@ -54,6 +76,7 @@ class AgentConfigTests(unittest.TestCase):
             save_screenshots=False,
             save_action_overlays=False,
             verify_mouse_targets=False,
+            abort_on_mouse_verification_failure=True,
             screenshot_dir="custom-screens",
             log_level="DEBUG",
             max_task_duration=25,
@@ -83,9 +106,27 @@ class AgentConfigTests(unittest.TestCase):
         self.assertFalse(agent.dry_run)
         self.assertFalse(agent.save_action_overlays)
         self.assertFalse(agent.verify_mouse_targets)
+        self.assertTrue(agent.abort_on_mouse_verification_failure)
         self.assertEqual(agent.allowed_actions, {"left_click", "terminate"})
         self.assertEqual(agent.max_executed_mouse_actions, 2)
         self.assertEqual(agent.additional_system_prompt, "Application controls")
+
+    @patch("see_think_act_agent.ActionExecutor")
+    @patch("see_think_act_agent.OllamaVisionClient")
+    @patch("see_think_act_agent.ScreenshotCapture")
+    def test_constructor_creates_nested_screenshot_directory(
+        self, screenshot_capture, _ollama_client, _action_executor
+    ):
+        screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        with tempfile.TemporaryDirectory(dir=".") as temp_dir:
+            screenshot_dir = Path(temp_dir) / "artifacts" / "tf_04" / "preparation"
+
+            SeeThinkActAgent(
+                save_screenshots=True,
+                screenshot_dir=str(screenshot_dir),
+            )
+
+            self.assertTrue(screenshot_dir.is_dir())
 
 
 if __name__ == "__main__":

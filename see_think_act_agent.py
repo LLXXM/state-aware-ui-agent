@@ -5,6 +5,7 @@ Autonomous agent that captures screenshots, analyzes with Qwen3.5 via Ollama, an
 import time
 import json
 import logging
+import copy
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 from datetime import datetime
@@ -41,6 +42,7 @@ class SeeThinkActAgent:
                  dry_run: bool = config.DRY_RUN,
                  save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS,
                  verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS,
+                 abort_on_mouse_verification_failure: bool = config.ABORT_ON_MOUSE_VERIFICATION_FAILURE,
                  allowed_actions: Optional[set] = config.ALLOWED_ACTIONS,
                  max_executed_mouse_actions: Optional[int] = config.MAX_EXECUTED_MOUSE_ACTIONS,
                  model_options: Optional[Dict[str, Any]] = None,
@@ -63,6 +65,8 @@ class SeeThinkActAgent:
             dry_run: Stop before executing the first proposed desktop action
             save_action_overlays: Whether to save planned mouse targets on screenshots
             verify_mouse_targets: Require model approval of marked mouse targets
+            abort_on_mouse_verification_failure: Abort when verification rejects
+                a mouse target; when False, record the rejection and continue
             allowed_actions: Optional set of permitted actions; None permits the schema
             max_executed_mouse_actions: Mouse actions permitted before pausing for approval
             model_options: Optional Ollama generation options
@@ -98,6 +102,7 @@ class SeeThinkActAgent:
         self.save_screenshots = save_screenshots
         self.save_action_overlays = save_action_overlays
         self.verify_mouse_targets = verify_mouse_targets
+        self.abort_on_mouse_verification_failure = abort_on_mouse_verification_failure
         self.allowed_actions = (
             None if allowed_actions is None else set(allowed_actions)
         )
@@ -115,7 +120,7 @@ class SeeThinkActAgent:
         
         # Create screenshot directory
         if self.save_screenshots:
-            self.screenshot_dir.mkdir(exist_ok=True)
+            self.screenshot_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize computer use tool
         self.computer_use = ComputerUse(
@@ -167,13 +172,26 @@ class SeeThinkActAgent:
         """Prepare tool definitions for Ollama"""
         # Convert ComputerUse function to Ollama tool format
         computer_function = self.computer_use.function
+        parameters = copy.deepcopy(computer_function["parameters"])
+        if self.allowed_actions is not None:
+            action_schema = parameters["properties"]["action"]
+            action_schema["enum"] = [
+                action
+                for action in action_schema.get("enum", [])
+                if action in self.allowed_actions
+            ]
+            allowed_list = ", ".join(action_schema["enum"])
+            action_schema["description"] = (
+                f"{action_schema.get('description', '').rstrip()}\n\n"
+                f"For this task, only these actions are allowed: {allowed_list}."
+            )
         
         tool = {
             "type": "function",
             "function": {
                 "name": computer_function["name"],
                 "description": computer_function["description"],
-                "parameters": computer_function["parameters"]
+                "parameters": parameters
             }
         }
         
@@ -213,28 +231,26 @@ class SeeThinkActAgent:
         overlay = screenshot.copy()
         x = int((coordinate[0] / 1000.0) * overlay.width)
         y = int((coordinate[1] / 1000.0) * overlay.height)
-        radius = max(6, int(min(overlay.size) * 0.006))
-        gap = max(3, radius // 2)
-        arm = radius + 5
+        radius = max(5, int(min(overlay.size) * 0.005))
+        gap = radius
+        arm = radius + 3
         draw = ImageDraw.Draw(overlay)
-        color = (255, 0, 0)
-        draw.ellipse((x - 2, y - 2, x + 2, y + 2), fill=color)
-        draw.line((x - arm, y, x - gap, y), fill=color, width=2)
-        draw.line((x + gap, y, x + arm, y), fill=color, width=2)
-        draw.line((x, y - arm, x, y - gap), fill=color, width=2)
-        draw.line((x, y + gap, x, y + arm), fill=color, width=2)
 
-        label = (
-            f"{arguments['action']} normalized={coordinate} pixels=({x}, {y})"
-        )
-        text_box = draw.textbbox((0, 0), label)
-        label_x = max(0, min(x + radius + 8, overlay.width - text_box[2] - 8))
-        label_y = max(0, min(y + radius + 8, overlay.height - text_box[3] - 8))
-        draw.rectangle(
-            (label_x - 4, label_y - 4, label_x + text_box[2] + 4, label_y + text_box[3] + 4),
-            fill=(255, 255, 255),
-        )
-        draw.text((label_x, label_y), label, fill=color)
+        def draw_crosshair(cx: int, cy: int, color):
+            draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=color)
+            draw.line((cx - arm, cy, cx - gap, cy), fill=color, width=2)
+            draw.line((cx + gap, cy, cx + arm, cy), fill=color, width=2)
+            draw.line((cx, cy - arm, cx, cy - gap), fill=color, width=2)
+            draw.line((cx, cy + gap, cx, cy + arm), fill=color, width=2)
+
+        if arguments.get("action") == "left_click_drag" and arguments.get("start_coordinate"):
+            start_coordinate = arguments["start_coordinate"]
+            start_x = int((start_coordinate[0] / 1000.0) * overlay.width)
+            start_y = int((start_coordinate[1] / 1000.0) * overlay.height)
+            draw_crosshair(start_x, start_y, (0, 80, 255))
+
+        draw_crosshair(x, y, (255, 0, 0))
+
         return overlay
 
     def _save_action_overlay(self, arguments: Dict[str, Any]) -> Optional[str]:
@@ -299,31 +315,8 @@ class SeeThinkActAgent:
             return intent.strip()
         return None
 
-    def _verify_mouse_target(
-        self, arguments: Dict[str, Any], action_intent: str = ""
-    ) -> bool:
-        """Ask the model to verify a marked target before a real mouse action."""
-        overlay = self._render_action_overlay(arguments)
-        if overlay is None:
-            self.last_mouse_verification = {
-                "decision": "reject",
-                "reason": "No marked screenshot could be rendered.",
-            }
-            return False
-
-        prompt = (
-            "You are verifying a proposed desktop mouse action before it is executed. "
-            f"The user's task is: {getattr(self, 'current_task', '')!r}. "
-            f"The requested action is {arguments['action']!r}. "
-            f"The planning model's intended target is described as: {action_intent or 'not supplied'!r}. "
-            "The red crosshair in the image is the exact click or pointer target. "
-            f"Prior action history is: {self._format_action_history() or 'none'}. "
-            "Verify the marked target against the planning model's intended target; "
-            "do not choose a different next action. Use verify_mouse_target with "
-            "decision='approve' only if the center of the red crosshair is clearly "
-            "on that intended UI element. "
-            "If it is misplaced, ambiguous, or unsafe, use decision='reject'."
-        )
+    def _run_mouse_target_verification(self, prompt: str, overlay) -> Dict[str, Any]:
+        """Run the structured verifier for one marked screenshot."""
         response = self.ollama_client.chat_with_image(
             user_query=prompt,
             image=overlay,
@@ -334,37 +327,179 @@ class SeeThinkActAgent:
         )
         tool_call = self.ollama_client.parse_computer_use_action(response)
         if not tool_call:
-            verification = {
+            return {
                 "decision": "reject",
                 "reason": "No structured target verification was returned.",
             }
+
+        if 'function' in tool_call:
+            details = tool_call['function']
+            name = details.get('name')
+            verification = details.get('arguments', {})
         else:
-            if 'function' in tool_call:
-                details = tool_call['function']
-                name = details.get('name')
-                verification = details.get('arguments', {})
-            else:
-                name = tool_call.get('name')
-                verification = tool_call.get('arguments', {})
+            name = tool_call.get('name')
+            verification = tool_call.get('arguments', {})
 
-            if isinstance(verification, str):
-                try:
-                    verification = json.loads(verification)
-                except json.JSONDecodeError:
-                    verification = {}
+        if isinstance(verification, str):
+            try:
+                verification = json.loads(verification)
+            except json.JSONDecodeError:
+                verification = {}
 
-            if name != "verify_mouse_target" or not isinstance(verification, dict):
-                verification = {
+        if name != "verify_mouse_target" or not isinstance(verification, dict):
+            return {
+                "decision": "reject",
+                "reason": "Unexpected target verification response.",
+            }
+        if verification.get("decision") not in {"approve", "reject"}:
+            return {
+                "decision": "reject",
+                "reason": "Target verification omitted a valid decision.",
+            }
+        if not isinstance(verification.get("reason"), str):
+            verification["reason"] = "No verification reason supplied."
+        return verification
+
+    def _mouse_verification_prompt(
+        self,
+        arguments: Dict[str, Any],
+        action_intent: str,
+        extra_instruction: str = "",
+    ) -> str:
+        """Build the prompt for one marked mouse-target verification image."""
+        prompt = (
+            "You are verifying a proposed desktop mouse action before it is executed. "
+            f"The user's task is: {getattr(self, 'current_task', '')!r}. "
+            f"The requested action is {arguments['action']!r}. "
+            f"The planning model's intended target is described as: {action_intent or 'not supplied'!r}. "
+            "The red center dot of the crosshair in the image is the exact click, "
+            "pointer, or drag endpoint being verified; the short red arms are "
+            "only visual guides and are not the target. "
+            "A crosshair may cover a small part of underlying UI text or controls; "
+            "account for that possible occlusion when judging the target. "
+            f"Prior action history is: {self._format_action_history() or 'none'}. "
+            "Verify the marked target against the planning model's intended target; "
+            "do not choose a different next action. Use verify_mouse_target with "
+            "decision='approve' only if the red center dot is clearly "
+            "on that intended UI element. "
+            "If it is misplaced, ambiguous, or unsafe, use decision='reject'."
+        )
+        if extra_instruction:
+            prompt += " " + extra_instruction
+        return prompt
+
+    def _verify_mouse_target(
+        self, arguments: Dict[str, Any], action_intent: str = ""
+    ) -> bool:
+        """Ask the model to verify a marked target before a real mouse action."""
+        if arguments.get("action") == "left_click_drag" and arguments.get("start_coordinate"):
+            source_arguments = dict(arguments)
+            source_arguments["action"] = "mouse_move"
+            source_arguments["coordinate"] = arguments["start_coordinate"]
+            source_overlay = self._render_action_overlay(source_arguments)
+            target_arguments = dict(arguments)
+            target_arguments["action"] = "mouse_move"
+            target_overlay = self._render_action_overlay(target_arguments)
+
+            if source_overlay is None or target_overlay is None:
+                self.last_mouse_verification = {
                     "decision": "reject",
-                    "reason": "Unexpected target verification response.",
+                    "reason": "No marked drag verification screenshot could be rendered.",
                 }
-            elif verification.get("decision") not in {"approve", "reject"}:
-                verification = {
+                return False
+
+            source_prompt = self._mouse_verification_prompt(
+                arguments,
+                action_intent,
+                (
+                    "This is drag verification step 1 of 2: verify only the drag "
+                    "start/source point from start_coordinate. Approve only if the "
+                    "red center dot is on the intended source item, source row, or "
+                    "source text described by the action intent."
+                ),
+            )
+            source_verification = self._run_mouse_target_verification(
+                source_prompt, source_overlay
+            )
+            if source_verification["decision"] != "approve":
+                self.last_mouse_verification = {
                     "decision": "reject",
-                    "reason": "Target verification omitted a valid decision.",
+                    "reason": (
+                        "Drag source rejected: "
+                        f"{source_verification.get('reason', 'No reason supplied.')}"
+                    ),
+                    "source": source_verification,
                 }
-            elif not isinstance(verification.get("reason"), str):
-                verification["reason"] = "No verification reason supplied."
+                self.logger.info(
+                    f"Mouse target verification: {self.last_mouse_verification}"
+                )
+                return False
+
+            target_prompt = self._mouse_verification_prompt(
+                arguments,
+                action_intent,
+                (
+                    "This is drag verification step 2 of 2: verify only the final "
+                    "drop target from coordinate. Approve only if the red center "
+                    "dot is on the intended destination/drop area described by the "
+                    "action intent. If it is still on the source item, source tree, "
+                    "or source list, reject it."
+                ),
+            )
+            target_verification = self._run_mouse_target_verification(
+                target_prompt, target_overlay
+            )
+            if target_verification["decision"] != "approve":
+                self.last_mouse_verification = {
+                    "decision": "reject",
+                    "reason": (
+                        "Drag target rejected: "
+                        f"{target_verification.get('reason', 'No reason supplied.')}"
+                    ),
+                    "source": source_verification,
+                    "target": target_verification,
+                }
+                self.logger.info(
+                    f"Mouse target verification: {self.last_mouse_verification}"
+                )
+                return False
+
+            self.last_mouse_verification = {
+                "decision": "approve",
+                "reason": "Drag source and target approved.",
+                "source": source_verification,
+                "target": target_verification,
+            }
+            self.logger.info(
+                f"Mouse target verification: {self.last_mouse_verification}"
+            )
+            return True
+
+        overlay = self._render_action_overlay(arguments)
+        if overlay is None:
+            self.last_mouse_verification = {
+                "decision": "reject",
+                "reason": "No marked screenshot could be rendered.",
+            }
+            return False
+
+        extra_instruction = ""
+        if arguments.get("action") == "mouse_move":
+            extra_instruction = (
+                " This is a hover/mouse_move verification. Existing hover highlights "
+                "or tooltips in the screenshot may still belong to the previous mouse "
+                "position and may not match the red crosshair yet. Do not reject a "
+                "mouse_move solely because a different nearby button is still highlighted; "
+                "verify whether the red center dot itself is on the intended future "
+                "hover target. If the mouse_move prepares a later drag from a tree "
+                "row or text item, approve only when the red center dot is vertically "
+                "centered on the intended source row/text, not on its upper edge, "
+                "neighbor row, or pane title."
+            )
+        prompt = self._mouse_verification_prompt(
+            arguments, action_intent, extra_instruction
+        )
+        verification = self._run_mouse_target_verification(prompt, overlay)
 
         self.last_mouse_verification = verification
         self.logger.info(f"Mouse target verification: {verification}")
@@ -381,15 +516,20 @@ class SeeThinkActAgent:
             timestamp = entry.get("timestamp", "unknown time")
             intent = entry.get("intent")
             intent_text = f" intent={intent!r}" if intent else ""
+            reason = entry.get("reason")
+            reason_text = f" reason={reason!r}" if reason else ""
             history_lines.append(
                 f"- {timestamp} iteration {entry['iteration']}: "
-                f"{arguments}{intent_text} -> {entry['outcome']}"
+                f"{arguments}{intent_text} -> {entry['outcome']}{reason_text}"
             )
 
         return (
             "\n\nExecution history from this task:\n"
             + "\n".join(history_lines)
             + "\nUse the current screenshot to verify effects and do not repeat successful steps unnecessarily."
+            + "\nIf a mouse action was blocked as repetition, do not retry the exact same action "
+            "with the exact same coordinate and intent after only waiting; adjust the target "
+            "or choose a different action based on the current screenshot."
         )
 
     def _record_action(
@@ -398,6 +538,7 @@ class SeeThinkActAgent:
         outcome: str,
         overlay_path: Optional[str] = None,
         intent: Optional[str] = None,
+        reason: Optional[str] = None,
     ) -> None:
         """Store a compact outcome record for later decisions."""
         entry = {
@@ -408,6 +549,8 @@ class SeeThinkActAgent:
         }
         if intent:
             entry["intent"] = intent
+        if reason:
+            entry["reason"] = reason
         if overlay_path is not None:
             entry["overlay_path"] = overlay_path
         self.action_history.append(entry)
@@ -452,6 +595,41 @@ class SeeThinkActAgent:
             previous_matches += 1
 
         return previous_matches >= max_repeats
+
+    def _would_repeat_same_mouse_target_after_wait(self, arguments: Dict[str, Any]) -> Optional[str]:
+        """Detect an unchanged mouse target retried after only passive observations."""
+        if arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+            return None
+
+        coordinate = arguments.get('coordinate')
+        intent = self._action_intent_from_arguments(arguments)
+        if coordinate is None or intent is None:
+            return None
+
+        passive_actions = {'wait', 'checkpoint'}
+        for entry in reversed(self.action_history):
+            previous = entry.get('arguments', {})
+            previous_action = previous.get('action')
+            if previous_action in passive_actions:
+                continue
+            if previous_action not in self.computer_use.MOUSE_ACTIONS:
+                return None
+
+            previous_intent = self._action_intent_from_arguments(previous)
+            if (
+                previous_action == arguments.get('action')
+                and previous.get('coordinate') == coordinate
+                and previous_intent == intent
+            ):
+                return (
+                    "Same mouse action, same coordinate, and same intent were already "
+                    "attempted with only wait/checkpoint observations since then. "
+                    "Choose a slightly adjusted target or a different action based on "
+                    "the current screenshot instead of repeating it 1:1."
+                )
+            return None
+
+        return None
 
     def _has_too_many_failures(self) -> bool:
         """Detect consecutive failed executable actions."""
@@ -533,6 +711,8 @@ class SeeThinkActAgent:
         # Parse the action from response
         self.last_tool_call = None
         self.last_action_record = None
+        self.last_action_overlay = None
+        self.last_mouse_verification = None
         action_intent = self._extract_action_intent(response)
         action = self.ollama_client.parse_computer_use_action(response)
         self.last_tool_call = action
@@ -621,16 +801,38 @@ class SeeThinkActAgent:
             )
             return False
 
+        mouse_repeat_reason = self._would_repeat_same_mouse_target_after_wait(arguments)
+        if mouse_repeat_reason:
+            self._record_action(
+                arguments,
+                'blocked_repetition',
+                overlay_path,
+                report_intent,
+                mouse_repeat_reason,
+            )
+            return False
+
         if (
             arguments.get('action') in self.computer_use.MOUSE_ACTIONS
             and getattr(self, 'verify_mouse_targets', False)
             and not self._verify_mouse_target(arguments, verification_intent)
         ):
-            self._record_action(arguments, 'blocked_verification', overlay_path, report_intent)
-            self._abort_task(
-                "mouse target verification rejected the proposed action: "
-                f"{self.last_mouse_verification['reason']}"
+            verification_reason = self.last_mouse_verification.get(
+                "reason",
+                "Mouse target verification rejected the proposed action.",
             )
+            self._record_action(
+                arguments,
+                'blocked_verification',
+                overlay_path,
+                report_intent,
+                verification_reason,
+            )
+            if getattr(self, 'abort_on_mouse_verification_failure', False):
+                self._abort_task(
+                    "mouse target verification rejected the proposed action: "
+                    f"{verification_reason}"
+                )
             return False
 
         if self._mouse_action_budget_reached(arguments):
@@ -686,6 +888,10 @@ class SeeThinkActAgent:
                 "max_iterations": self.max_iterations,
                 "screenshot_dir": str(self.screenshot_dir),
                 "allowed_actions": sorted(self.allowed_actions) if self.allowed_actions else None,
+                "verify_mouse_targets": self.verify_mouse_targets,
+                "abort_on_mouse_verification_failure": (
+                    self.abort_on_mouse_verification_failure
+                ),
             },
         )
 
@@ -704,9 +910,7 @@ class SeeThinkActAgent:
                 datetime.now().isoformat(timespec="seconds"),
             ),
             "screenshot_path": getattr(self, 'current_screenshot_path', None),
-            "overlay_path": (
-                action_record or {}
-            ).get("overlay_path") or getattr(self, 'last_action_overlay', None),
+            "overlay_path": (action_record or {}).get("overlay_path"),
             "user_prompt": getattr(self, 'last_user_prompt', None),
             "system_prompt": getattr(self, 'last_system_prompt', None),
             "response": response,

@@ -71,6 +71,60 @@ class AgentSafetyTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertFalse(self.agent.task_completed)
 
+    def test_same_mouse_target_and_intent_after_wait_is_blocked_without_abort(self):
+        repeated = {
+            "action": "left_click",
+            "coordinate": [200, 300],
+            "intent": "Click the GO button.",
+        }
+        self.agent.action_history = [
+            {"iteration": 1, "arguments": repeated, "outcome": "executed"},
+            {
+                "iteration": 2,
+                "arguments": {"action": "wait", "time": 1},
+                "outcome": "executed",
+            },
+        ]
+        self._model_action(repeated)
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertFalse(result)
+        self.assertFalse(self.agent.task_completed)
+        self.assertIsNone(self.agent.task_status)
+        self.assertIsNone(self.agent.abort_reason)
+        self.assertEqual(self.agent.action_history[-1]["outcome"], "blocked_repetition")
+        self.assertIn("same coordinate", self.agent.action_history[-1]["reason"])
+        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+
+    def test_same_mouse_intent_with_adjusted_coordinate_after_wait_is_allowed(self):
+        previous = {
+            "action": "left_click",
+            "coordinate": [200, 300],
+            "intent": "Click the GO button.",
+        }
+        adjusted = {
+            "action": "left_click",
+            "coordinate": [205, 300],
+            "intent": "Click the GO button.",
+        }
+        self.agent.action_history = [
+            {"iteration": 1, "arguments": previous, "outcome": "executed"},
+            {
+                "iteration": 2,
+                "arguments": {"action": "wait", "time": 1},
+                "outcome": "executed",
+            },
+        ]
+        self.agent.action_executor.execute_computer_use_action.return_value = True
+        self._model_action(adjusted)
+
+        with patch("see_think_act_agent.time.sleep"):
+            result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertEqual(self.agent.action_history[-1]["outcome"], "executed")
+
     def test_consecutive_failed_executions_abort_task(self):
         self.agent.max_repeated_actions = 0
         self.agent.action_executor.execute_computer_use_action.return_value = False

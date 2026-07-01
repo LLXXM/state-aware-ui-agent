@@ -114,6 +114,8 @@ class AgentCompletionTests(unittest.TestCase):
 
     def test_checkpoint_records_observation_without_completing_task(self):
         self.agent.dry_run = True
+        self.agent.last_action_overlay = "old_planned_action.png"
+        self.agent.last_mouse_verification = {"decision": "approve"}
         self.agent.ollama_client.parse_computer_use_action.return_value = {
             "name": "computer_use",
             "arguments": {
@@ -135,6 +137,9 @@ class AgentCompletionTests(unittest.TestCase):
         )
         self.assertEqual(self.agent.action_history[0]["outcome"], "observed")
         self.assertIn("timestamp", self.agent.action_history[0])
+        self.assertNotIn("overlay_path", self.agent.action_history[0])
+        self.assertIsNone(self.agent.last_action_overlay)
+        self.assertIsNone(self.agent.last_mouse_verification)
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     @patch("see_think_act_agent.time.sleep")
