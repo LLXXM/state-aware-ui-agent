@@ -1,6 +1,6 @@
 """TF-01: Validate dynamic ABC display across layout hierarchy changes."""
 
-from ui_contexts import IBAPDA_TF_01_LAYOUT_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_01_LAYOUT_CONTEXT
 from ui_tests.test_cases import UiTestCase
 
 
@@ -74,7 +74,6 @@ CASE = UiTestCase(
         {
             "double_click",
             "left_click",
-            "scroll",
             "wait",
             "checkpoint",
             "terminate",

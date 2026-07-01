@@ -1,6 +1,6 @@
 """TF-02: Validate dynamic labels under visibility and active-state changes."""
 
-from ui_contexts import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_02_DYNAMIC_LABEL_CONTEXT
 from ui_tests.test_cases import UiTestCase
 
 
@@ -97,7 +97,6 @@ CASE = UiTestCase(
             "double_click",
             "left_click",
             "right_click",
-            "scroll",
             "wait",
             "checkpoint",
             "terminate",

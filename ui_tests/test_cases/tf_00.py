@@ -1,6 +1,6 @@
 """TF-00: Safely start and stop ibaPDA Data Recording."""
 
-from ui_contexts import IBAPDA_UI_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_UI_CONTEXT
 from ui_tests.test_cases import UiTestCase
 
 

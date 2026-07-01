@@ -1,6 +1,6 @@
 """TF-04: Navigate and validate a complex docked QPanel layout."""
 
-from ui_contexts import IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT
 from ui_tests.test_cases import UiTestCase
 
 
@@ -189,7 +189,7 @@ CASE = UiTestCase(
     ),
     task=TASK,
     prepare_task=PREPARE_TASK,
-    measurement_repetitions=1,
+    measurement_repetitions=5,
     additional_system_prompt=IBAPDA_TF_04_COMPLEX_LAYOUT_CONTEXT,
     allowed_actions=frozenset(
         {

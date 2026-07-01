@@ -1,6 +1,6 @@
 """TF-03: Validate multilingual navigation in Client Preferences."""
 
-from ui_contexts import IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_03_CLIENT_PREFERENCES_LANGUAGE_CONTEXT
 from ui_tests.test_cases import UiTestCase
 
 
@@ -108,7 +108,6 @@ CASE = UiTestCase(
         {
             "double_click",
             "left_click",
-            "scroll",
             "wait",
             "checkpoint",
             "terminate",

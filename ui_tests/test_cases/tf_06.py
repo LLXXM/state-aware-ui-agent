@@ -1,19 +1,20 @@
 """TF-06: Validate semantic consistency of dynamic UI states."""
 
-from ui_contexts import IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT
+from ui_tests.contexts.ibapda import IBAPDA_TF_06_SEMANTIC_STATE_CONTEXT
 from ui_tests.test_cases import UiTestCase
 
 
 TASK = """
 Perform test case TF-06, semantic validation of dynamic UI states in ibaPDA.
 
-Project and visualization under test:
-- Project: test_layout_multistatelabel.
-- The QPanel/display area contains a trend curve and a multistatelabel.
-- Both elements are driven by the same triangle signal with a value range from
-  -100 to 100.
-- The test verifies consistency between signal state, label text, and label
-  background color.
+Goal:
+- Validate the loaded test_layout_multistatelabel scenario.
+- Confirm semantic consistency between the trend curve signal state and the
+  multistatelabel text/background color.
+- Observe and checkpoint both semantic states at least once:
+  positive: trend positive, label 'Wert > 0', green background;
+  negative: trend negative, label 'Wert < 0', red background.
+- Stop Data Recording before terminating successfully.
 
 Initialization:
 1. Open ibaPDA Client by double-clicking the visible Windows desktop shortcut
@@ -22,45 +23,33 @@ Initialization:
 2. Wait until the ibaPDA main window is visible and the QPanel/display area is
    loaded.
 3. Verify that the loaded project/layout is the TF-06 multistatelabel scenario.
-   The title bar or visible layout should refer to test_layout_multistatelabel,
-   or the QPanel should clearly show the TF-06 trend curve and multistatelabel.
 4. Ensure Data Recording is active. If it is stopped, start it by clicking the
    center of the filled green GO button and wait until active recording is
    visible. If it is already running, do not click GO again.
 
 Identify the relevant UI elements:
-5. Identify the trend curve in the QPanel/display area. It is the large black
-   chart with grid lines, a blue triangle-like signal trace, time labels, and
-   a right-side y-axis with values around -100 to 100.
-6. Identify the multistatelabel below the trend curve. It is a rectangular
-   label whose background changes color and whose text changes between
-   'Wert > 0' and 'Wert < 0'.
-7. Record a checkpoint confirming that both elements are visible in the same
+5. Identify the trend curve and the multistatelabel in the QPanel/display area.
+6. Record a checkpoint confirming that both elements are visible in the same
    overall view.
 
 Semantic validation:
-8. Observe the current trend state, the current multistatelabel text, and the
-   current multistatelabel background color from the same full-screen view.
-9. If the trend state is positive, verify that the label shows 'Wert > 0' and
-   has a green background.
-10. If the trend state is negative, verify that the label shows 'Wert < 0' and
-    has a red background.
-11. If the trend is crossing near zero or the label state changes while being
+7. Observe the current trend state, multistatelabel text, and multistatelabel
+   background color from the same full-screen view.
+8. Validate the positive state when visible: trend positive, label 'Wert > 0',
+   green background.
+9. Validate the negative state when visible: trend negative, label 'Wert < 0',
+   red background.
+10. If the trend is crossing near zero or the label state changes while being
     observed, wait briefly and repeat the observation instead of treating the
     transient frame as failure.
-12. For a validated positive state, record a checkpoint that states the trend
-    is positive, the label text is 'Wert > 0', the background is green, and the
-    consistency rule is satisfied.
-13. For a validated negative state, record a checkpoint that states the trend
-    is negative, the label text is 'Wert < 0', the background is red, and the
-    consistency rule is satisfied.
-14. Continue observing after short waits until both the positive and negative
+11. For each validated state, record a checkpoint that states the trend state,
+    label text, label background color, and whether the consistency rule is
+    satisfied.
+12. Continue observing after short waits until both the positive and negative
     states have each been validated at least once.
 
 Completion:
-15. Stop Data Recording with the filled STOP button if Data Recording is still
-    active, and verify that recording is stopped.
-16. Terminate with status success only after both semantic states were observed
+13. Terminate with status success only after both semantic states were observed
     and validated consistently, and Data Recording has been stopped.
 
 Safety restrictions:
