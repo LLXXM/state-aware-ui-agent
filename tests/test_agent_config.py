@@ -89,7 +89,7 @@ class AgentConfigTests(unittest.TestCase):
             max_executed_mouse_actions=2,
             model_options={"temperature": 0},
             report_dir="custom-reports",
-            additional_system_prompt="Application controls",
+            additional_system_prompt="Application-specific controls",
         )
 
         ollama_client.assert_called_once_with(

@@ -1,55 +1,54 @@
-# Computer-Use-Agent
+# State-aware-UI-agent (State-Agent)
 
-Windows UI agent prototype for controlled ibaPDA test cases using Ollama and
-Qwen3.5. The agent observes screenshots, proposes structured computer actions,
-verifies mouse targets, and records self-contained HTML reports for each run.
+Windows UI agent for computer-use test automation using Ollama and Qwen3.5.
+The agent observes screenshots, proposes structured computer actions,
+verifies mouse targets visually, and records self-contained HTML reports.
 
 ## Structure
 
 ```text
-Computer-Use-Agent/
+State-aware-UI-agent/
   see_think_act_agent.py       Core see-think-act loop
   config.py                    Runtime and safety defaults
-  utils/                       Ollama client and action execution
+  utils/                       Ollama client, action execution, screenshots, reports
   ui_tests/
     contexts/                  Application-specific UI context prompts
     run_test_case.py           Single test-case runner
     test_cases/                Executable test-case definitions
-      tf_00.py                 Data Recording start/stop cycle
-    support/                   Cleanup and window-management helpers
+      notepad_basic.py         Example: Notepad text entry
+      calculator_basic.py      Example: Calculator operations
+    support/                   Generic window management & app lifecycle
   tests/                       Automated unit tests
   ui_tests/test_cases/
-    Reports_Masterarbeit/      Generated reports and screenshots, ignored by Git
+    Reports/                   Generated reports and screenshots (gitignored)
 ```
 
 ## Run A Test Case
 
-Run TF-00:
+Run an example test case:
 
 ```powershell
-py -m ui_tests.run_test_case TF-00
+py -m ui_tests.run_test_case NOTEPAD-00
 ```
 
-`TF-00` cleans up an existing ibaPDA Client window if needed, opens ibaPDA,
-starts Data Recording, verifies the running state, stops recording, verifies
-the stopped state, and closes the client safely.
+This launches Notepad, types text, saves the file, and closes Notepad safely.
 
 ## Add A Test Case
 
-Create a module such as `ui_tests/test_cases/tf_01.py` containing a
-`UiTestCase` instance named `CASE`. Each case defines its task text, allowed
-actions, optional UI context, limits, and whether ibaPDA cleanup is required.
-Tests that do not activate Data Recording use the same runner and simply omit
-recording actions from their task.
+Create a module in `ui_tests/test_cases/` (e.g., `my_app_basic.py`) containing
+a `UiTestCase` instance named `CASE`. Each case defines:
 
-See the README files in `utils/`, `ui_tests/`, `ui_tests/contexts/`,
-`ui_tests/test_cases/`, `ui_tests/support/`, and `tests/` for folder-level
-module overviews.
+- Task text (`task`, optional `prepare_task`)
+- Application UI context (`app_context` from `contexts/`)
+- Allowed actions, iteration/time limits
+- Pre-run setup & post-run cleanup callables (use `make_setup_fn`/`make_cleanup_fn`)
+
+See `ui_tests/test_cases/README.md` for full field documentation and examples.
 
 ## Configure A UI Test Run
 
 Most run behavior is configured on the `UiTestCase` object in
-`ui_tests/test_cases/tf_XX.py`. Defaults come from `config.py`.
+`ui_tests/test_cases/<name>.py`. Defaults come from `config.py`.
 
 Common fields:
 
@@ -59,10 +58,10 @@ Common fields:
   runner executes `task` directly once.
 - `measurement_repetitions`: Number of measured `task` runs after a successful
   `prepare_task`.
-- `additional_system_prompt`: Extra UI context, usually from
-  `ui_tests/contexts/ibapda.py`.
+- `app_context`: Extra UI context, usually from `ui_tests/contexts/<app>.py`
+  (or `generic.py` for simple apps).
 - `allowed_actions`: Actions allowed for this test case. Use this to restrict
-  risky or irrelevant tools per TF case.
+  risky or irrelevant tools per case.
 - `max_iterations`: Maximum agent iterations per agent run.
 - `max_task_duration`: Maximum runtime in seconds per agent run.
 - `max_repeated_actions`: Blocks repeated identical actions.
@@ -77,51 +76,39 @@ Common fields:
 - `model_options`: Ollama options for this case, for example `temperature`,
   `num_ctx`, and `num_predict`.
 
-Window and cleanup fields:
+Setup/cleanup fields:
 
-- `cleanup_ibapda_before`: If true, the runner closes an existing ibaPDA window
-  before the test starts.
-- `cleanup_ibapda_after`: If true, the runner closes ibaPDA after the workflow.
-- `minimize_windows_before`: If true, the runner uses `Win+M` before the
-  workflow. This minimizes all windows, including an already open ibaPDA.
-- `minimize_vscode_before`: If true, the runner minimizes visible Visual Studio
-  Code windows only and leaves ibaPDA untouched. Use this for special manual
-  starts where ibaPDA is already open and should remain visible.
+- `pre_run_setup`: Callable `() -> dict` for app launch, window prep, etc.
+- `post_run_cleanup`: Callable `() -> dict` for app close, window restore, etc.
+- `report_dir_name`: Report subdirectory name (default from config).
+
+Use `ui_tests.support.app_lifecycle.make_setup_fn()` and `make_cleanup_fn()`
+for standard patterns.
 
 Report output:
 
-- By default, UI test reports are written next to the test-case scripts under
-  `ui_tests/test_cases/Reports_Masterarbeit/<tf_xx>/...`.
+- By default, UI test reports are written under `ui_tests/test_cases/Reports/<case_id>/...`.
 - Each report folder is self-contained. Screenshots, action overlays, and other
   image artifacts are stored below that report folder in `screenshots/`.
 - For prepared measurement runs, preparation, each measurement run, and cleanup
-  each get their own subfolder with its own HTML report and `screenshots/`
-  directory.
-- The older `ui_tests/test_cases/Reports/...` folder is left untouched, so old
-  exploratory runs and new master-thesis runs stay separated.
-- Change `config.TEST_CASE_REPORTS_DIR_NAME` to use another default report
-  folder name.
-- Use `--report-dir <path>` when starting a single run if a one-off custom
-  report path is needed.
-
-Typical modes:
-
-- Standard automated mode:
-  `prepare_task=PREPARE_TASK`, `cleanup_ibapda_before=True`,
-  `minimize_windows_before=True`, `minimize_vscode_before=False`.
-- Manual existing-ibaPDA mode:
-  `prepare_task=None`, `cleanup_ibapda_before=False`,
-  `minimize_windows_before=False`, `minimize_vscode_before=True`.
+  each get their own subfolder with its own HTML report and `screenshots/` directory.
+- Change `config.TEST_CASE_REPORTS_DIR_NAME` to use another default report folder name.
+- Use `--report-dir <path>` when starting a single run if a one-off custom report path is needed.
 
 ## Safety
 
 - Move the mouse to the top-left corner to trigger the `pyautogui` failsafe.
 - Mouse targets are saved as overlays and visually verified before execution.
-- ibaPDA cleanup prevents duplicate client instances and avoids leaving Data
-  Recording active after a test case.
+- Setup/cleanup hooks handle application lifecycle to avoid duplicate instances.
 
 ## Verify
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+## Documentation
+
+See README files in `utils/`, `ui_tests/`, `ui_tests/contexts/`,
+`ui_tests/test_cases/`, `ui_tests/support/`, and `tests/` for folder-level
+module overviews.

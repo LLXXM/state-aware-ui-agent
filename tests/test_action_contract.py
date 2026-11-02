@@ -28,10 +28,10 @@ class ComputerUseSchemaTests(unittest.TestCase):
         arguments = ComputerUse().validate_arguments({
             "action": "wait",
             "time": 2,
-            "intent": "Wait for ibaPDA to finish loading.",
+            "intent": "Wait for the application to finish loading.",
         })
 
-        self.assertEqual(arguments["intent"], "Wait for ibaPDA to finish loading.")
+        self.assertEqual(arguments["intent"], "Wait for the application to finish loading.")
 
     def test_rejects_empty_action_intent(self):
         with self.assertRaises(ActionValidationError):

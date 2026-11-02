@@ -31,7 +31,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
         self.agent.save_screenshots = False
         self.agent.save_action_overlays = False
         self.agent.current_screenshot = Image.new("RGB", (1000, 1000), "white")
-        self.agent.current_task = "Minimize Visual Studio Code."
+        self.agent.current_task = "Minimize the application window."
         self.agent.last_mouse_verification = None
         self.agent.post_action_delay = 0.1
 
@@ -100,11 +100,11 @@ class AgentMouseVerificationTests(unittest.TestCase):
                     "action": "left_click_drag",
                     "start_coordinate": [300, 600],
                     "coordinate": [600, 600],
-                    "intent": "Drag GenerateSignal from the signal tree onto the trend curve.",
+                    "intent": "Drag the item from the source list onto the target area.",
                 },
             },
-            self._verification("approve", "Crosshair is on GenerateSignal."),
-            self._verification("approve", "Crosshair is on the trend curve."),
+            self._verification("approve", "Crosshair is on the source item."),
+            self._verification("approve", "Crosshair is on the target area."),
         ]
         self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
@@ -141,7 +141,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
         verification_prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
             "user_query"
         ]
-        self.assertIn("Minimize Visual Studio Code", verification_prompt)
+        self.assertIn("Minimize the application window", verification_prompt)
 
     def test_approved_mouse_target_is_held_after_budget_is_spent(self):
         self.agent.max_executed_mouse_actions = 1
@@ -204,9 +204,9 @@ class AgentMouseVerificationTests(unittest.TestCase):
     def test_verification_prefers_tool_intent_for_planned_stop_target(self, sleep):
         self.agent.ollama_client.parse_computer_use_action.side_effect = [
             self._proposed_click_with_intent(
-                "Click the center of the red STOP button."
+                "Click the center of the red stop button."
             ),
-            self._verification("approve", "Crosshair is on STOP."),
+            self._verification("approve", "Crosshair is on stop button."),
         ]
         self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
         response = {
@@ -221,7 +221,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
         prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
             "user_query"
         ]
-        self.assertIn("Click the center of the red STOP button.", prompt)
+        self.assertIn("Click the center of the red stop button.", prompt)
         self.assertNotIn("Long planning text", prompt)
         self.assertIn("do not choose a different next action", prompt)
 
@@ -248,7 +248,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
     def test_mouse_move_verification_mentions_stale_hover_highlights(self, sleep):
         self.agent.ollama_client.parse_computer_use_action.side_effect = [
             self._proposed_mouse_move_with_intent(
-                "Hover over the second design toolbar icon."
+                "Hover over the second toolbar icon."
             ),
             self._verification("approve", "Crosshair is on the hover target."),
         ]

@@ -69,7 +69,7 @@ class AgentPromptTests(unittest.TestCase):
 
     def test_additional_system_prompt_is_sent_separately_from_general_source(self):
         self.agent.iteration_count = 1
-        self.agent.additional_system_prompt = "The green Go button starts ibaPDA."
+        self.agent.additional_system_prompt = "The green Go button starts the recording."
 
         self.agent._think_and_decide("Start the operation", screenshot=object())
 
@@ -78,7 +78,7 @@ class AgentPromptTests(unittest.TestCase):
         ]
         self.assertEqual(self.agent._get_system_prompt(), config.SYSTEM_PROMPT)
         self.assertIn("Application-specific UI context:", prompt)
-        self.assertIn("The green Go button starts ibaPDA.", prompt)
+        self.assertIn("The green Go button starts the recording.", prompt)
 
     def test_checkpoint_observation_is_included_in_later_prompt(self):
         self.agent.iteration_count = 3
