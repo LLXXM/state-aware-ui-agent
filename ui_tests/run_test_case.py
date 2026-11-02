@@ -1,4 +1,4 @@
-"""Run an individual UI test case with common preparation and cleanup."""
+"""Run an individual UI test case with generic preparation and cleanup."""
 
 import argparse
 import importlib
@@ -11,13 +11,7 @@ from typing import Any, Optional
 
 import config
 from see_think_act_agent import SeeThinkActAgent
-from ui_tests.support.ibapda_cleanup import ensure_ibapda_closed
 from ui_tests.test_cases import UiTestCase
-from ui_tests.support.window_setup import (
-    minimize_all_windows_for_test,
-    minimize_vscode_windows_for_test,
-    restore_minimized_windows_after_test,
-)
 
 
 def load_test_case(case_id: str) -> UiTestCase:
@@ -48,7 +42,7 @@ def default_report_dir_for_case(case: UiTestCase) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return str(
         test_case_dir
-        / config.TEST_CASE_REPORTS_DIR_NAME
+        / case.report_dir_name
         / module_name
         / f"{module_name}_{timestamp}"
     )
@@ -78,7 +72,7 @@ def _build_agent(case: UiTestCase, report_dir: str) -> SeeThinkActAgent:
         save_action_overlays=case.save_action_overlays,
         model_options=case.model_options,
         report_dir=report_dir,
-        additional_system_prompt=case.additional_system_prompt,
+        additional_system_prompt=case.app_context,
     )
 
 
@@ -161,26 +155,27 @@ def _run_case_workflow(
 
 
 def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[str, Any]:
-    """Execute one test case using optional generic ibaPDA safety boundaries."""
+    """Execute one test case using generic setup and cleanup hooks."""
     report_dir = report_dir or default_report_dir_for_case(case)
     report_base = Path(report_dir)
 
-    if case.cleanup_ibapda_before:
-        pre_cleanup_report_dir = str(report_base / "pre_cleanup")
-        pre_cleanup = ensure_ibapda_closed(
-            screenshot_dir=_screenshots_dir_for_report(pre_cleanup_report_dir),
-            report_dir=pre_cleanup_report_dir,
-        )
+    # Pre-run setup
+    if case.pre_run_setup:
+        pre_setup_report_dir = str(report_base / "pre_setup")
+        pre_setup = case.pre_run_setup()
+        # Optionally attach report dir to result for traceability
+        if isinstance(pre_setup, dict):
+            pre_setup.setdefault("report_dir", pre_setup_report_dir)
     else:
-        pre_cleanup = _not_required_result("No ibaPDA pre-cleanup configured.")
+        pre_setup = _not_required_result("No pre-run setup configured.")
 
-    if not pre_cleanup.get("success"):
+    if not pre_setup.get("success"):
         return {
             "success": False,
-            "status": "pre_cleanup_failed",
-            "message": "The configured pre-cleanup could not be completed.",
+            "status": "pre_setup_failed",
+            "message": "The configured pre-run setup could not be completed.",
             "test_case": case.case_id,
-            "pre_cleanup": pre_cleanup,
+            "pre_setup": pre_setup,
         }
 
     print(f"Starting UI test case {case.case_id}: {case.description}")
@@ -189,10 +184,6 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
 
     workflow: dict[str, Any]
     post_cleanup: dict[str, Any]
-    if case.minimize_windows_before:
-        minimize_all_windows_for_test()
-    elif case.minimize_vscode_before:
-        minimize_vscode_windows_for_test()
     try:
         try:
             workflow = _run_case_workflow(case, report_dir)
@@ -203,18 +194,17 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
                 "message": str(exc),
             }
 
-        if case.cleanup_ibapda_after:
+        # Post-run cleanup
+        if case.post_run_cleanup:
             post_cleanup_report_dir = str(report_base / "post_cleanup")
-            post_cleanup = ensure_ibapda_closed(
-                screenshot_dir=_screenshots_dir_for_report(post_cleanup_report_dir),
-                check_connection=False,
-                report_dir=post_cleanup_report_dir,
-            )
+            post_cleanup = case.post_run_cleanup()
+            if isinstance(post_cleanup, dict):
+                post_cleanup.setdefault("report_dir", post_cleanup_report_dir)
         else:
-            post_cleanup = _not_required_result("No ibaPDA post-cleanup configured.")
+            post_cleanup = _not_required_result("No post-run cleanup configured.")
     finally:
-        if case.minimize_windows_before:
-            restore_minimized_windows_after_test()
+        # No automatic window restoration - cleanup hook handles it if needed
+        pass
 
     workflow_succeeded = workflow.get("status") == "success"
     cleanup_succeeded = bool(post_cleanup.get("success"))
@@ -223,7 +213,7 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
         "status": "success",
         "message": f"Test case {case.case_id} completed and cleanup succeeded.",
         "test_case": case.case_id,
-        "pre_cleanup": pre_cleanup,
+        "pre_setup": pre_setup,
         "workflow": workflow,
         "post_cleanup": post_cleanup,
         "report_dir": report_dir,
