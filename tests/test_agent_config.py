@@ -109,7 +109,7 @@ class AgentConfigTests(unittest.TestCase):
         self.assertTrue(agent.abort_on_mouse_verification_failure)
         self.assertEqual(agent.allowed_actions, {"left_click", "terminate"})
         self.assertEqual(agent.max_executed_mouse_actions, 2)
-        self.assertEqual(agent.additional_system_prompt, "Application controls")
+        self.assertEqual(agent.additional_system_prompt, "Application-specific controls")
 
     @patch("see_think_act_agent.ActionExecutor")
     @patch("see_think_act_agent.OllamaVisionClient")
