@@ -21,7 +21,7 @@ DRY_RUN = True
 ALLOWED_ACTIONS = None  # None allows every validated computer_use action.
 MAX_EXECUTED_MOUSE_ACTIONS = None  # None does not impose a mouse-action budget.
 
-# UI test case defaults. Individual tf_XX.py files should only override values
+# UI test case defaults. Individual test case files should only override values
 # that are intentionally different for that specific test case.
 TEST_CASE_DEFAULT_PREPARE_TASK = None
 TEST_CASE_DEFAULT_MEASUREMENT_REPETITIONS = 1
@@ -32,10 +32,7 @@ TEST_CASE_DEFAULT_MAX_TASK_DURATION = 240
 TEST_CASE_DEFAULT_MAX_REPEATED_ACTIONS = 2
 TEST_CASE_DEFAULT_MAX_CONSECUTIVE_FAILURES = 2
 TEST_CASE_DEFAULT_MAX_EXECUTED_MOUSE_ACTIONS = None
-TEST_CASE_MINIMIZE_WINDOWS_BEFORE = True
-TEST_CASE_CLEANUP_IBAPDA_BEFORE = True
-TEST_CASE_CLEANUP_IBAPDA_AFTER = True
-TEST_CASE_REPORTS_DIR_NAME = "Reports_Masterarbeit"
+TEST_CASE_REPORTS_DIR_NAME = "Reports"
 
 # Delays in seconds.
 ITERATION_DELAY = 0.5

@@ -1,7 +1,7 @@
 """Definitions for executable UI test cases."""
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import config
 
@@ -15,9 +15,7 @@ class UiTestCase:
     task: str
     prepare_task: Optional[str] = config.TEST_CASE_DEFAULT_PREPARE_TASK
     measurement_repetitions: int = config.TEST_CASE_DEFAULT_MEASUREMENT_REPETITIONS
-    additional_system_prompt: Optional[str] = (
-        config.TEST_CASE_DEFAULT_ADDITIONAL_SYSTEM_PROMPT
-    )
+    app_context: Optional[str] = config.TEST_CASE_DEFAULT_ADDITIONAL_SYSTEM_PROMPT
     allowed_actions: Optional[frozenset[str]] = config.TEST_CASE_DEFAULT_ALLOWED_ACTIONS
     max_iterations: int = config.TEST_CASE_DEFAULT_MAX_ITERATIONS
     max_task_duration: float = config.TEST_CASE_DEFAULT_MAX_TASK_DURATION
@@ -36,7 +34,6 @@ class UiTestCase:
     model_options: dict[str, Any] = field(
         default_factory=lambda: dict(config.MODEL_OPTIONS)
     )
-    minimize_windows_before: bool = config.TEST_CASE_MINIMIZE_WINDOWS_BEFORE
-    minimize_vscode_before: bool = False
-    cleanup_ibapda_before: bool = config.TEST_CASE_CLEANUP_IBAPDA_BEFORE
-    cleanup_ibapda_after: bool = config.TEST_CASE_CLEANUP_IBAPDA_AFTER
+    pre_run_setup: Optional[Callable[[], dict]] = None
+    post_run_cleanup: Optional[Callable[[], dict]] = None
+    report_dir_name: str = config.TEST_CASE_REPORTS_DIR_NAME
