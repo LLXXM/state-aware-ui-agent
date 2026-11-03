@@ -1,4 +1,5 @@
 """Factory for creating LLM provider instances."""
+
 from enum import Enum
 from typing import Optional, Dict, Any
 
@@ -7,6 +8,7 @@ from utils.llm_providers.base import LLMProvider
 
 class LLMProviderType(Enum):
     """Supported LLM provider types."""
+
     OLLAMA = "ollama"
     OPENROUTER = "openrouter"
     OPENAI = "openai"
@@ -24,7 +26,7 @@ def create_provider(
     provider_type: LLMProviderType,
     model: Optional[str] = None,
     options: Optional[Dict[str, Any]] = None,
-    **kwargs
+    **kwargs,
 ) -> LLMProvider:
     """
     Factory to create provider instances.
@@ -48,14 +50,17 @@ def create_provider(
 
     if provider_type == LLMProviderType.OLLAMA:
         from utils.llm_providers.ollama_provider import OllamaProvider
+
         return OllamaProvider(model=model, options=options)
 
     elif provider_type == LLMProviderType.OPENROUTER:
         from utils.llm_providers.openrouter_provider import OpenRouterProvider
+
         return OpenRouterProvider(model=model, options=options, **kwargs)
 
     elif provider_type == LLMProviderType.OPENAI:
         from utils.llm_providers.openai_provider import OpenAIProvider
+
         return OpenAIProvider(model=model, options=options, **kwargs)
 
     raise ValueError(f"Unknown provider type: {provider_type}")
@@ -65,7 +70,7 @@ def create_provider_from_string(
     provider_name: str,
     model: Optional[str] = None,
     options: Optional[Dict[str, Any]] = None,
-    **kwargs
+    **kwargs,
 ) -> LLMProvider:
     """
     Create provider from string name (case-insensitive).
@@ -83,7 +88,5 @@ def create_provider_from_string(
         provider_type = LLMProviderType(provider_name.lower())
     except ValueError:
         valid = [p.value for p in LLMProviderType]
-        raise ValueError(
-            f"Unknown provider: '{provider_name}'. Valid options: {valid}"
-        )
+        raise ValueError(f"Unknown provider: '{provider_name}'. Valid options: {valid}")
     return create_provider(provider_type, model, options, **kwargs)

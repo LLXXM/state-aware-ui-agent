@@ -1,4 +1,5 @@
 """Ollama provider implementation wrapping existing OllamaVisionClient."""
+
 import json
 from typing import List, Dict, Any, Optional
 from PIL import Image
@@ -31,14 +32,11 @@ class OllamaProvider(LLMProvider):
         user_query: str,
         image: Image.Image,
         system_prompt: Optional[str] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Send a chat request with image and optional tools."""
         return self._client.chat_with_image(
-            user_query=user_query,
-            image=image,
-            system_prompt=system_prompt,
-            tools=tools
+            user_query=user_query, image=image, system_prompt=system_prompt, tools=tools
         )
 
     def extract_tool_calls(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:

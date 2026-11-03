@@ -1,4 +1,5 @@
 """Abstract base class for LLM providers supporting vision and tool calling."""
+
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from PIL import Image
@@ -13,7 +14,7 @@ class LLMProvider(ABC):
         user_query: str,
         image: Image.Image,
         system_prompt: Optional[str] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Send a chat request with image and optional tools."""
         pass

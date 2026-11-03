@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "state-aware-ui-agent"
+version = "0.1.0"
+description = "See-Think-Act AI Agent for Windows 11 with multi-provider LLM support"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = [
+    "mss>=9.0.1",
+    "pyautogui>=0.9.54",
+    "Pillow>=10.0.0",
+    "ollama>=0.1.0",
+    "openai>=1.30.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.0.0",
+    "ipykernel>=6.25.0",
+    "jupyter>=1.0.0",
+    "ipython>=8.12.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["utils*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["*Tests"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+include = '\.py$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | __pycache__
+  | \.pytest_cache
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "W", "UP", "B", "C4", "T20"]
+ignore = []
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    "ui_tests/test_cases/Reports_Masterarbeit",
+]

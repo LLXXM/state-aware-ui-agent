@@ -1,4 +1,5 @@
 """Unit tests for the LLM provider abstraction layer."""
+
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 from typing import Dict, Any, List, Optional
@@ -28,7 +29,9 @@ class TestLLMProviderType(unittest.TestCase):
         self.assertIn(LLMProviderType.OPENROUTER, DEFAULT_MODEL_BY_PROVIDER)
         self.assertIn(LLMProviderType.OPENAI, DEFAULT_MODEL_BY_PROVIDER)
         self.assertEqual(DEFAULT_MODEL_BY_PROVIDER[LLMProviderType.OLLAMA], "qwen3.5:397b-cloud")
-        self.assertEqual(DEFAULT_MODEL_BY_PROVIDER[LLMProviderType.OPENROUTER], "qwen/qwen2.5-vl-72b-instruct")
+        self.assertEqual(
+            DEFAULT_MODEL_BY_PROVIDER[LLMProviderType.OPENROUTER], "qwen/qwen2.5-vl-72b-instruct"
+        )
         self.assertEqual(DEFAULT_MODEL_BY_PROVIDER[LLMProviderType.OPENAI], "gpt-4o")
 
 
@@ -93,7 +96,9 @@ class TestOllamaProvider(unittest.TestCase):
         provider = OllamaProvider(model="qwen3.5:397b-cloud", options={"temperature": 0.1})
         self.assertEqual(provider.model, "qwen3.5:397b-cloud")
         self.assertEqual(provider.options, {"temperature": 0.1})
-        mock_client_class.assert_called_once_with(model="qwen3.5:397b-cloud", options={"temperature": 0.1})
+        mock_client_class.assert_called_once_with(
+            model="qwen3.5:397b-cloud", options={"temperature": 0.1}
+        )
 
     @patch("utils.llm_providers.ollama_provider.OllamaVisionClient")
     def test_chat_with_image_delegates(self, mock_client_class):
@@ -105,10 +110,7 @@ class TestOllamaProvider(unittest.TestCase):
         result = provider.chat_with_image("test query", image, system_prompt="sys prompt")
 
         self.mock_vision_client.chat_with_image.assert_called_once_with(
-            user_query="test query",
-            image=image,
-            system_prompt="sys prompt",
-            tools=None
+            user_query="test query", image=image, system_prompt="sys prompt", tools=None
         )
         self.assertEqual(result, {"message": {"content": "OK"}})
 
@@ -118,7 +120,9 @@ class TestOllamaProvider(unittest.TestCase):
         self.mock_vision_client.extract_tool_calls.return_value = [{"function": {"name": "test"}}]
 
         provider = OllamaProvider(model="test-model")
-        result = provider.extract_tool_calls({"message": {"tool_calls": [{"function": {"name": "test"}}]}})
+        result = provider.extract_tool_calls(
+            {"message": {"tool_calls": [{"function": {"name": "test"}}]}}
+        )
 
         self.mock_vision_client.extract_tool_calls.assert_called_once()
         self.assertEqual(result, [{"function": {"name": "test"}}])
@@ -126,10 +130,14 @@ class TestOllamaProvider(unittest.TestCase):
     @patch("utils.llm_providers.ollama_provider.OllamaVisionClient")
     def test_parse_computer_use_action_delegates(self, mock_client_class):
         mock_client_class.return_value = self.mock_vision_client
-        self.mock_vision_client.parse_computer_use_action.return_value = {"function": {"name": "computer_use"}}
+        self.mock_vision_client.parse_computer_use_action.return_value = {
+            "function": {"name": "computer_use"}
+        }
 
         provider = OllamaProvider(model="test-model")
-        result = provider.parse_computer_use_action({"message": {"tool_calls": [{"function": {"name": "computer_use"}}]}})
+        result = provider.parse_computer_use_action(
+            {"message": {"tool_calls": [{"function": {"name": "computer_use"}}]}}
+        )
 
         self.mock_vision_client.parse_computer_use_action.assert_called_once()
         self.assertEqual(result, {"function": {"name": "computer_use"}})
@@ -151,7 +159,12 @@ class TestLLMProviderInterface(unittest.TestCase):
 
     def test_abstract_methods_defined(self):
         abstract_methods = BaseLLMProvider.__abstractmethods__
-        expected = {"chat_with_image", "extract_tool_calls", "parse_computer_use_action", "test_connection"}
+        expected = {
+            "chat_with_image",
+            "extract_tool_calls",
+            "parse_computer_use_action",
+            "test_connection",
+        }
         self.assertEqual(abstract_methods, expected)
 
     def test_ollama_provider_implements_interface(self):
@@ -173,9 +186,7 @@ class TestOpenRouterProviderMocked(unittest.TestCase):
         from utils.llm_providers.openrouter_provider import OpenRouterProvider
 
         provider = OpenRouterProvider(
-            model="qwen/qwen2.5-vl-72b-instruct",
-            api_key="test-key",
-            options={"temperature": 0.1}
+            model="qwen/qwen2.5-vl-72b-instruct", api_key="test-key", options={"temperature": 0.1}
         )
 
         self.assertEqual(provider.model, "qwen/qwen2.5-vl-72b-instruct")

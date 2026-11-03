@@ -1,4 +1,5 @@
 """OpenRouter provider implementation using OpenAI-compatible API."""
+
 import json
 import base64
 import io
@@ -60,7 +61,9 @@ class OpenRouterProvider(LLMProvider):
 
         self.base_url = base_url or os.environ.get("OPENROUTER_BASE_URL") or self.DEFAULT_BASE_URL
         self.referer = referer or os.environ.get("OPENROUTER_REFERER") or self.DEFAULT_REFERER
-        self.app_title = app_title or os.environ.get("OPENROUTER_APP_TITLE") or self.DEFAULT_APP_TITLE
+        self.app_title = (
+            app_title or os.environ.get("OPENROUTER_APP_TITLE") or self.DEFAULT_APP_TITLE
+        )
 
         # Initialize OpenAI client with OpenRouter base URL
         self._client = OpenAI(
@@ -69,7 +72,7 @@ class OpenRouterProvider(LLMProvider):
             default_headers={
                 "HTTP-Referer": self.referer,
                 "X-Title": self.app_title,
-            }
+            },
         )
 
         # Map common option names to OpenAI format
@@ -89,40 +92,36 @@ class OpenRouterProvider(LLMProvider):
         return base64.b64encode(img_bytes).decode("utf-8")
 
     def _build_messages(
-        self,
-        user_query: str,
-        image: Image.Image,
-        system_prompt: Optional[str] = None
+        self, user_query: str, image: Image.Image, system_prompt: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Build messages array for OpenAI-compatible API."""
         messages = []
 
         if system_prompt:
-            messages.append({
-                "role": "system",
-                "content": system_prompt
-            })
+            messages.append({"role": "system", "content": system_prompt})
 
         # Encode image
         image_base64 = self._encode_image(image)
 
         # User message with image
-        messages.append({
-            "role": "user",
-            "content": [
-                {"type": "text", "text": user_query},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{image_base64}"
-                    }
-                }
-            ]
-        })
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_query},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                    },
+                ],
+            }
+        )
 
         return messages
 
-    def _convert_tools(self, tools: Optional[List[Dict[str, Any]]]) -> Optional[List[Dict[str, Any]]]:
+    def _convert_tools(
+        self, tools: Optional[List[Dict[str, Any]]]
+    ) -> Optional[List[Dict[str, Any]]]:
         """Convert tools to OpenAI function calling format."""
         if not tools:
             return None
@@ -131,14 +130,16 @@ class OpenRouterProvider(LLMProvider):
         for tool in tools:
             if tool.get("type") == "function":
                 func = tool.get("function", {})
-                openai_tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": func.get("name"),
-                        "description": func.get("description"),
-                        "parameters": func.get("parameters", {})
+                openai_tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": func.get("name"),
+                            "description": func.get("description"),
+                            "parameters": func.get("parameters", {}),
+                        },
                     }
-                })
+                )
         return openai_tools if openai_tools else None
 
     def _map_options(self) -> Dict[str, Any]:
@@ -157,7 +158,7 @@ class OpenRouterProvider(LLMProvider):
         user_query: str,
         image: Image.Image,
         system_prompt: Optional[str] = None,
-        tools: Optional[List[Dict[str, Any]]] = None
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Send a chat request with image and optional tools."""
         messages = self._build_messages(user_query, image, system_prompt)
@@ -166,10 +167,7 @@ class OpenRouterProvider(LLMProvider):
 
         # Make the request
         response = self._client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=openai_tools,
-            **options
+            model=self.model, messages=messages, tools=openai_tools, **options
         )
 
         # Convert to Ollama-like response format for compatibility
@@ -183,12 +181,7 @@ class OpenRouterProvider(LLMProvider):
 
         if message.tool_calls:
             result["message"]["tool_calls"] = [
-                {
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments
-                    }
-                }
+                {"function": {"name": tc.function.name, "arguments": tc.function.arguments}}
                 for tc in message.tool_calls
             ]
 
@@ -227,11 +220,9 @@ class OpenRouterProvider(LLMProvider):
             # Test with a simple chat request
             response = self._client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "user", "content": "Connection check. Reply with OK."}
-                ],
+                messages=[{"role": "user", "content": "Connection check. Reply with OK."}],
                 max_tokens=10,
-                **self._map_options()
+                **self._map_options(),
             )
             print(f"OK: Model '{self.model}' answered a chat request via OpenRouter")
             return True
