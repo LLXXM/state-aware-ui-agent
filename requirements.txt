@@ -6,6 +6,7 @@ mss>=9.0.1                    # Fast cross-platform screen capture
 pyautogui>=0.9.54            # GUI automation (mouse & keyboard)
 Pillow>=10.0.0               # Image processing
 ollama>=0.1.0                # Ollama Python client
+openai>=1.30.0               # OpenAI API (also used for OpenRouter)
 
 # Additional utilities
 python-dotenv>=1.0.0         # Environment variable management
