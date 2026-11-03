@@ -2,10 +2,11 @@ import inspect
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import config
 from see_think_act_agent import SeeThinkActAgent
+from utils.llm_providers import LLMProviderType
 
 
 class AgentConfigTests(unittest.TestCase):
@@ -13,14 +14,13 @@ class AgentConfigTests(unittest.TestCase):
         parameters = inspect.signature(SeeThinkActAgent.__init__).parameters
 
         expected_defaults = {
-            "model": config.MODEL_NAME,
+            "provider_type": "ollama",
+            "model": None,
             "max_iterations": config.MAX_ITERATIONS,
             "save_screenshots": config.SAVE_SCREENSHOTS,
             "save_action_overlays": config.SAVE_ACTION_OVERLAYS,
             "verify_mouse_targets": config.VERIFY_MOUSE_TARGETS,
-            "abort_on_mouse_verification_failure": (
-                config.ABORT_ON_MOUSE_VERIFICATION_FAILURE
-            ),
+            "abort_on_mouse_verification_failure": config.ABORT_ON_MOUSE_VERIFICATION_FAILURE,
             "screenshot_dir": config.SCREENSHOT_DIR,
             "log_level": config.LOG_LEVEL,
             "max_task_duration": config.MAX_TASK_DURATION,
@@ -33,20 +33,21 @@ class AgentConfigTests(unittest.TestCase):
             "max_executed_mouse_actions": config.MAX_EXECUTED_MOUSE_ACTIONS,
             "model_options": None,
             "report_dir": config.REPORT_DIR,
+            "additional_system_prompt": None,
         }
 
         for name, default in expected_defaults.items():
             self.assertEqual(parameters[name].default, default)
 
     def test_system_prompt_comes_from_config(self):
-        agent = SeeThinkActAgent.__new__(SeeThinkActAgent)
+        agent = SeeThinkActAgent(provider_type="ollama", model="test-model")
 
         self.assertEqual(agent._get_system_prompt(), config.SYSTEM_PROMPT)
         self.assertIn("checkpoint", config.SYSTEM_PROMPT)
         self.assertIn("computer_use", config.SYSTEM_PROMPT)
 
     def test_prepare_tools_filters_action_enum_to_allowed_actions(self):
-        agent = SeeThinkActAgent.__new__(SeeThinkActAgent)
+        agent = SeeThinkActAgent(provider_type="ollama", model="test-model")
         from utils.agent_function_call import ComputerUse
 
         agent.computer_use = ComputerUse()
@@ -63,14 +64,17 @@ class AgentConfigTests(unittest.TestCase):
         )
 
     @patch("see_think_act_agent.ActionExecutor")
-    @patch("see_think_act_agent.OllamaVisionClient")
     @patch("see_think_act_agent.ScreenshotCapture")
+    @patch("see_think_act_agent.create_provider")
     def test_constructor_arguments_override_config(
-        self, screenshot_capture, ollama_client, action_executor
+        self, mock_create_provider, mock_screenshot_capture, mock_action_executor
     ):
-        screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        mock_screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        mock_provider = Mock()
+        mock_create_provider.return_value = mock_provider
 
         agent = SeeThinkActAgent(
+            provider_type="openrouter",
             model="custom-model",
             max_iterations=7,
             save_screenshots=False,
@@ -92,11 +96,12 @@ class AgentConfigTests(unittest.TestCase):
             additional_system_prompt="Application-specific controls",
         )
 
-        ollama_client.assert_called_once_with(
+        mock_create_provider.assert_called_once_with(
+            LLMProviderType.OPENROUTER,
             model="custom-model",
             options={"temperature": 0},
         )
-        action_executor.assert_called_once_with(screen_width=1280, screen_height=720)
+        mock_action_executor.assert_called_once_with(screen_width=1280, screen_height=720)
         self.assertEqual(agent.max_iterations, 7)
         self.assertEqual(agent.max_task_duration, 25)
         self.assertEqual(agent.max_repeated_actions, 1)
@@ -110,18 +115,22 @@ class AgentConfigTests(unittest.TestCase):
         self.assertEqual(agent.allowed_actions, {"left_click", "terminate"})
         self.assertEqual(agent.max_executed_mouse_actions, 2)
         self.assertEqual(agent.additional_system_prompt, "Application-specific controls")
+        self.assertEqual(agent.report_dir, "custom-reports")
 
     @patch("see_think_act_agent.ActionExecutor")
-    @patch("see_think_act_agent.OllamaVisionClient")
     @patch("see_think_act_agent.ScreenshotCapture")
+    @patch("see_think_act_agent.create_provider")
     def test_constructor_creates_nested_screenshot_directory(
-        self, screenshot_capture, _ollama_client, _action_executor
+        self, mock_create_provider, mock_screenshot_capture, mock_action_executor
     ):
-        screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        mock_screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        mock_create_provider.return_value = Mock()
+
         with tempfile.TemporaryDirectory(dir=".") as temp_dir:
             screenshot_dir = Path(temp_dir) / "artifacts" / "tf_04" / "preparation"
 
             SeeThinkActAgent(
+                provider_type="ollama",
                 save_screenshots=True,
                 screenshot_dir=str(screenshot_dir),
             )

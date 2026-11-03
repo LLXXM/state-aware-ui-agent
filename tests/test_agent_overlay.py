@@ -1,8 +1,8 @@
 import logging
-from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 from PIL import Image
 
@@ -11,12 +11,25 @@ from utils.agent_function_call import ComputerUse
 
 
 class AgentOverlayTests(unittest.TestCase):
-    def setUp(self):
+    @patch("see_think_act_agent.create_provider")
+    @patch("see_think_act_agent.ActionExecutor")
+    @patch("see_think_act_agent.ScreenshotCapture")
+    def setUp(self, mock_screenshot_capture, mock_action_executor, mock_create_provider):
+        mock_screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        mock_action_executor.return_value = Mock()
+        mock_create_provider.return_value = Mock()
+
         self.temp_dir = tempfile.TemporaryDirectory(dir=".")
         self.addCleanup(self.temp_dir.cleanup)
-        self.agent = SeeThinkActAgent.__new__(SeeThinkActAgent)
-        self.agent.logger = logging.getLogger(__name__)
-        self.agent.ollama_client = Mock()
+
+        self.agent = SeeThinkActAgent(
+            provider_type="ollama",
+            model="test-model",
+            dry_run=True,
+            save_screenshots=True,
+            save_action_overlays=True,
+        )
+        self.agent.llm_provider = Mock()
         self.agent.action_executor = Mock()
         self.agent.computer_use = ComputerUse()
         self.agent.task_completed = False
@@ -32,7 +45,7 @@ class AgentOverlayTests(unittest.TestCase):
         self.agent.current_screenshot = Image.new("RGB", (1000, 1000), "white")
 
     def test_dry_run_saves_marked_mouse_target_before_execution(self):
-        self.agent.ollama_client.parse_computer_use_action.return_value = {
+        self.agent.llm_provider.parse_computer_use_action.return_value = {
             "name": "computer_use",
             "arguments": {"action": "left_click", "coordinate": [500, 500]},
         }
@@ -50,7 +63,7 @@ class AgentOverlayTests(unittest.TestCase):
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
     def test_non_mouse_action_does_not_save_overlay(self):
-        self.agent.ollama_client.parse_computer_use_action.return_value = {
+        self.agent.llm_provider.parse_computer_use_action.return_value = {
             "name": "computer_use",
             "arguments": {"action": "type", "text": "hello"},
         }

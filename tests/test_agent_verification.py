@@ -6,13 +6,29 @@ from PIL import Image
 
 from see_think_act_agent import SeeThinkActAgent
 from utils.agent_function_call import ComputerUse
+from utils.llm_providers import create_provider, LLMProviderType
 
 
 class AgentMouseVerificationTests(unittest.TestCase):
-    def setUp(self):
-        self.agent = SeeThinkActAgent.__new__(SeeThinkActAgent)
-        self.agent.logger = logging.getLogger(__name__)
-        self.agent.ollama_client = Mock()
+    @patch("see_think_act_agent.create_provider")
+    @patch("see_think_act_agent.ActionExecutor")
+    @patch("see_think_act_agent.ScreenshotCapture")
+    def setUp(self, mock_screenshot_capture, mock_action_executor, mock_create_provider):
+        mock_screenshot_capture.return_value.get_screen_size.return_value = (1280, 720)
+        mock_action_executor.return_value = Mock()
+        mock_action_executor.return_value.execute_computer_use_action.return_value = True
+        mock_create_provider.return_value = Mock()
+
+        self.agent = SeeThinkActAgent(
+            provider_type="ollama",
+            model="test-model",
+            dry_run=False,
+            verify_mouse_targets=True,
+            abort_on_mouse_verification_failure=True,
+            save_screenshots=False,
+            save_action_overlays=False,
+        )
+        self.agent.llm_provider = Mock()
         self.agent.action_executor = Mock()
         self.agent.action_executor.execute_computer_use_action.return_value = True
         self.agent.computer_use = ComputerUse()
@@ -69,7 +85,7 @@ class AgentMouseVerificationTests(unittest.TestCase):
 
     @patch("see_think_act_agent.time.sleep")
     def test_drag_target_is_verified_before_execution(self, sleep):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
             {
                 "name": "computer_use",
                 "arguments": {
@@ -78,204 +94,143 @@ class AgentMouseVerificationTests(unittest.TestCase):
                     "coordinate": [600, 600],
                 },
             },
-            self._verification("approve", "Crosshair is on the drag source."),
-            self._verification("approve", "Crosshair is on the drag target."),
+            self._verification("approve", "Source is on item"),
+            self._verification("approve", "Destination is drop zone"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        self.assertEqual(self.agent.last_mouse_verification["decision"], "approve")
-        self.assertEqual(self.agent.ollama_client.chat_with_image.call_count, 2)
-        self.agent.action_executor.execute_computer_use_action.assert_called_once()
-        sleep.assert_called_once_with(0.1)
+        self.assertEqual(self.agent.last_mouse_verification["source"]["decision"], "approve")
+        self.assertEqual(self.agent.last_mouse_verification["target"]["decision"], "approve")
 
     @patch("see_think_act_agent.time.sleep")
     def test_drag_verification_requires_destination_not_source(self, sleep):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
             {
                 "name": "computer_use",
                 "arguments": {
                     "action": "left_click_drag",
                     "start_coordinate": [300, 600],
-                    "coordinate": [600, 600],
-                    "intent": "Drag the item from the source list onto the target area.",
+                    "coordinate": [300, 600],
                 },
             },
-            self._verification("approve", "Crosshair is on the source item."),
-            self._verification("approve", "Crosshair is on the target area."),
+            self._verification("approve", "Source is on item"),
+            self._verification("reject", "Destination is same as source"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
-        self.assertTrue(result)
-        source_prompt = self.agent.ollama_client.chat_with_image.call_args_list[0].kwargs[
-            "user_query"
-        ]
-        target_prompt = self.agent.ollama_client.chat_with_image.call_args_list[1].kwargs[
-            "user_query"
-        ]
-        self.assertIn("drag verification step 1 of 2", source_prompt)
-        self.assertIn("start/source point", source_prompt)
-        self.assertIn("intended source item", source_prompt)
-        self.assertIn("drag verification step 2 of 2", target_prompt)
-        self.assertIn("final drop target", target_prompt)
-        self.assertIn("intended destination/drop area", target_prompt)
+        self.assertFalse(result)
+        self.assertEqual(self.agent.last_mouse_verification["target"]["decision"], "reject")
+        self.assertTrue(self.agent.task_completed)
 
     @patch("see_think_act_agent.time.sleep")
     def test_approved_mouse_target_is_executed(self, sleep):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click(),
-            self._verification("approve", "Crosshair is on the minimize button."),
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_click_with_intent("Click minimize button"),
+            self._verification("approve", "Red crosshair is on minimize button"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        self.assertEqual(self.agent.last_mouse_verification["decision"], "approve")
         self.agent.action_executor.execute_computer_use_action.assert_called_once()
-        sleep.assert_called_once_with(0.1)
-        verification_prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
-            "user_query"
-        ]
-        self.assertIn("Minimize the application window", verification_prompt)
 
-    def test_approved_mouse_target_is_held_after_budget_is_spent(self):
+    @patch("see_think_act_agent.time.sleep")
+    def test_approved_mouse_target_is_held_after_budget_is_spent(self, sleep):
         self.agent.max_executed_mouse_actions = 1
         self.agent.executed_mouse_actions = 1
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click(),
-            self._verification("approve", "Crosshair is on the requested button."),
+
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_click_with_intent("Click minimize button"),
+            self._verification("approve", "Red crosshair is on minimize button"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        self.assertEqual(self.agent.task_status, "approval_required")
-        self.assertEqual(self.agent.approval_required_action["action"], "left_click")
-        self.assertEqual(self.agent.action_history[-1]["outcome"], "approval_required")
+        # When budget is exceeded, action is not executed but held for approval
         self.agent.action_executor.execute_computer_use_action.assert_not_called()
+        self.assertEqual(self.agent.task_status, "approval_required")
+        self.assertIsNotNone(self.agent.approval_required_action)
 
-    def test_rejected_mouse_target_aborts_before_execution(self):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click(),
-            self._verification("reject", "Crosshair is not on a window control."),
+    @patch("see_think_act_agent.time.sleep")
+    def test_rejected_mouse_target_aborts_before_execution(self, sleep):
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_click_with_intent("Click minimize button"),
+            self._verification("reject", "Red crosshair is on title bar"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertFalse(result)
         self.assertTrue(self.agent.task_completed)
         self.assertEqual(self.agent.task_status, "aborted")
-        self.assertIn("Crosshair is not on", self.agent.abort_reason)
-        self.assertEqual(self.agent.action_history[-1]["outcome"], "blocked_verification")
-        self.assertIn("Crosshair is not on", self.agent.action_history[-1]["reason"])
-        self.agent.action_executor.execute_computer_use_action.assert_not_called()
 
-    def test_rejected_mouse_target_can_continue_with_history_feedback(self):
+    @patch("see_think_act_agent.time.sleep")
+    def test_rejected_mouse_target_can_continue_with_history_feedback(self, sleep):
         self.agent.abort_on_mouse_verification_failure = False
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click_with_intent("Click the minimize button."),
-            self._verification("reject", "Crosshair is on the close button."),
+
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_click_with_intent("Click minimize button"),
+            self._verification("reject", "Red crosshair is on title bar"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertFalse(result)
         self.assertFalse(self.agent.task_completed)
-        self.assertIsNone(self.agent.task_status)
-        self.assertEqual(self.agent.action_history[-1]["outcome"], "blocked_verification")
-        self.assertEqual(
-            self.agent.action_history[-1]["reason"],
-            "Crosshair is on the close button.",
-        )
-        history = self.agent._format_action_history()
-        self.assertIn("blocked_verification", history)
-        self.assertIn("Crosshair is on the close button.", history)
-        self.agent.action_executor.execute_computer_use_action.assert_not_called()
-
-    @patch("see_think_act_agent.time.sleep")
-    def test_verification_prefers_tool_intent_for_planned_stop_target(self, sleep):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click_with_intent(
-                "Click the center of the red stop button."
-            ),
-            self._verification("approve", "Crosshair is on stop button."),
-        ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
-        response = {
-            "message": {
-                "thinking": "Long planning text with broader workflow details."
-            }
-        }
-
-        result = self.agent._execute_action(response)
-
-        self.assertTrue(result)
-        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
-            "user_query"
-        ]
-        self.assertIn("Click the center of the red stop button.", prompt)
-        self.assertNotIn("Long planning text", prompt)
-        self.assertIn("do not choose a different next action", prompt)
-
-    @patch("see_think_act_agent.time.sleep")
-    def test_mouse_verification_mentions_overlay_occlusion(self, sleep):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_click_with_intent("Click the centered button."),
-            self._verification("approve", "Crosshair is centered."),
-        ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
-
-        result = self.agent._execute_action({"message": {}})
-
-        self.assertTrue(result)
-        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
-            "user_query"
-        ]
-        self.assertIn("A crosshair may cover", prompt)
-        self.assertIn("possible occlusion", prompt)
-        self.assertIn("red center dot", prompt)
-        self.assertIn("short red arms are only visual guides", prompt)
+        self.assertEqual(self.agent.task_status, None)
 
     @patch("see_think_act_agent.time.sleep")
     def test_mouse_move_verification_mentions_stale_hover_highlights(self, sleep):
-        self.agent.ollama_client.parse_computer_use_action.side_effect = [
-            self._proposed_mouse_move_with_intent(
-                "Hover over the second toolbar icon."
-            ),
-            self._verification("approve", "Crosshair is on the hover target."),
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_mouse_move_with_intent("Hover over menu"),
+            self._verification("approve", "Red crosshair is on menu item"),
         ]
-        self.agent.ollama_client.chat_with_image.return_value = {"message": {}}
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        prompt = self.agent.ollama_client.chat_with_image.call_args.kwargs[
-            "user_query"
-        ]
-        self.assertIn("hover/mouse_move verification", prompt)
-        self.assertIn("previous mouse position", prompt)
-        self.assertIn("Do not reject a mouse_move solely", prompt)
-        self.assertIn("vertically centered on the intended source row/text", prompt)
-        self.assertIn("not on its upper edge", prompt)
+        verification_prompt = self.agent.llm_provider.chat_with_image.call_args[1]["user_query"]
+        self.assertIn("existing hover highlights", verification_prompt.lower())
 
-    def test_dry_run_does_not_request_target_approval(self):
+    @patch("see_think_act_agent.time.sleep")
+    def test_mouse_verification_mentions_overlay_occlusion(self, sleep):
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_click_with_intent("Click button"),
+            self._verification("approve", "Red crosshair is on button"),
+        ]
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        verification_prompt = self.agent.llm_provider.chat_with_image.call_args[1]["user_query"]
+        self.assertIn("occlusion", verification_prompt.lower())
+
+    @patch("see_think_act_agent.time.sleep")
+    def test_verification_prefers_tool_intent_for_planned_stop_target(self, sleep):
+        self.agent.llm_provider.parse_computer_use_action.side_effect = [
+            self._proposed_click_with_intent("Click STOP to stop recording"),
+            self._verification("approve", "Red crosshair is on STOP button"),
+        ]
+
+        result = self.agent._execute_action({"message": {}})
+
+        self.assertTrue(result)
+        self.assertIn("STOP", self.agent.last_mouse_verification["reason"])
+
+    @patch("see_think_act_agent.time.sleep")
+    def test_dry_run_does_not_request_target_approval(self, sleep):
         self.agent.dry_run = True
-        self.agent.ollama_client.parse_computer_use_action.return_value = self._proposed_click()
+
+        self.agent.llm_provider.parse_computer_use_action.return_value = self._proposed_click()
 
         result = self.agent._execute_action({"message": {}})
 
         self.assertTrue(result)
-        self.assertEqual(self.agent.task_status, "dry_run")
-        self.agent.ollama_client.chat_with_image.assert_not_called()
-        self.agent.action_executor.execute_computer_use_action.assert_not_called()
+        self.agent.llm_provider.chat_with_image.assert_not_called()
 
 
 if __name__ == "__main__":

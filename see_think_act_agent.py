@@ -1,7 +1,8 @@
 """
 See-Think-Act Agent for Windows 11
-Autonomous agent that captures screenshots, analyzes with Qwen3.5 via Ollama, and performs actions
+Autonomous agent that captures screenshots, analyzes with LLM, and performs actions
 """
+
 import time
 import json
 import logging
@@ -18,6 +19,8 @@ from utils.ollama_client import OllamaVisionClient
 from utils.action_executor import ActionExecutor
 from utils.agent_function_call import ActionValidationError, ComputerUse
 from utils.html_report import HtmlRunReport
+from utils.llm_providers import create_provider, LLMProviderType
+from utils.agent_graph import build_agent_graph, create_initial_state, finalize_state
 
 
 class SeeThinkActAgent:
@@ -27,32 +30,36 @@ class SeeThinkActAgent:
     - Think: Analyzes with Qwen3.5 model via Ollama
     - Act: Executes actions based on model's decisions
     """
-    
-    def __init__(self,
-                 model: str = config.MODEL_NAME,
-                 max_iterations: int = config.MAX_ITERATIONS,
-                 save_screenshots: bool = config.SAVE_SCREENSHOTS,
-                 screenshot_dir: str = config.SCREENSHOT_DIR,
-                 log_level: str = config.LOG_LEVEL,
-                 max_task_duration: float = config.MAX_TASK_DURATION,
-                 max_repeated_actions: int = config.MAX_REPEATED_ACTIONS,
-                 max_consecutive_failures: int = config.MAX_CONSECUTIVE_FAILURES,
-                 iteration_delay: float = config.ITERATION_DELAY,
-                 post_action_delay: float = config.POST_ACTION_DELAY,
-                 dry_run: bool = config.DRY_RUN,
-                 save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS,
-                 verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS,
-                 abort_on_mouse_verification_failure: bool = config.ABORT_ON_MOUSE_VERIFICATION_FAILURE,
-                 allowed_actions: Optional[set] = config.ALLOWED_ACTIONS,
-                 max_executed_mouse_actions: Optional[int] = config.MAX_EXECUTED_MOUSE_ACTIONS,
-                 model_options: Optional[Dict[str, Any]] = None,
-                 report_dir: Optional[str] = config.REPORT_DIR,
-                 additional_system_prompt: Optional[str] = None):
+
+    def __init__(
+        self,
+        provider_type: str = "ollama",
+        model: Optional[str] = None,
+        max_iterations: int = config.MAX_ITERATIONS,
+        save_screenshots: bool = config.SAVE_SCREENSHOTS,
+        screenshot_dir: str = config.SCREENSHOT_DIR,
+        log_level: str = config.LOG_LEVEL,
+        max_task_duration: float = config.MAX_TASK_DURATION,
+        max_repeated_actions: int = config.MAX_REPEATED_ACTIONS,
+        max_consecutive_failures: int = config.MAX_CONSECUTIVE_FAILURES,
+        iteration_delay: float = config.ITERATION_DELAY,
+        post_action_delay: float = config.POST_ACTION_DELAY,
+        dry_run: bool = config.DRY_RUN,
+        save_action_overlays: bool = config.SAVE_ACTION_OVERLAYS,
+        verify_mouse_targets: bool = config.VERIFY_MOUSE_TARGETS,
+        abort_on_mouse_verification_failure: bool = config.ABORT_ON_MOUSE_VERIFICATION_FAILURE,
+        allowed_actions: Optional[set] = config.ALLOWED_ACTIONS,
+        max_executed_mouse_actions: Optional[int] = config.MAX_EXECUTED_MOUSE_ACTIONS,
+        model_options: Optional[Dict[str, Any]] = None,
+        report_dir: Optional[str] = config.REPORT_DIR,
+        additional_system_prompt: Optional[str] = None,
+    ):
         """
         Initialize the See-Think-Act Agent
-        
+
         Args:
-            model: Ollama model name
+            provider_type: LLM provider ("ollama", "openrouter", "openai")
+            model: Model name (defaults to provider's default)
             max_iterations: Maximum number of iterations before stopping
             save_screenshots: Whether to save screenshots
             screenshot_dir: Directory to save screenshots
@@ -69,28 +76,36 @@ class SeeThinkActAgent:
                 a mouse target; when False, record the rejection and continue
             allowed_actions: Optional set of permitted actions; None permits the schema
             max_executed_mouse_actions: Mouse actions permitted before pausing for approval
-            model_options: Optional Ollama generation options
+            model_options: Optional LLM generation options
             report_dir: Directory for the incremental HTML report; None disables reporting
             additional_system_prompt: Optional application-specific UI knowledge
         """
         # Setup logging
         logging.basicConfig(
             level=getattr(logging, log_level),
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         )
         self.logger = logging.getLogger(__name__)
-        
+
         # Initialize components
         self.screenshot_capture = ScreenshotCapture()
-        self.ollama_client = OllamaVisionClient(model=model, options=model_options)
-        
+
+        # Create LLM provider
+        if model is None:
+            model = config.DEFAULT_MODEL_BY_PROVIDER.get(provider_type.lower(), config.MODEL_NAME)
+
+        self.llm_provider = create_provider(
+            LLMProviderType(provider_type.lower()),
+            model=model,
+            options=model_options,
+        )
+
         # Get actual screen size
         screen_width, screen_height = self.screenshot_capture.get_screen_size()
         self.action_executor = ActionExecutor(
-            screen_width=screen_width,
-            screen_height=screen_height
+            screen_width=screen_width, screen_height=screen_height
         )
-        
+
         # Configuration
         self.max_iterations = max_iterations
         self.max_task_duration = max_task_duration
@@ -103,63 +118,41 @@ class SeeThinkActAgent:
         self.save_action_overlays = save_action_overlays
         self.verify_mouse_targets = verify_mouse_targets
         self.abort_on_mouse_verification_failure = abort_on_mouse_verification_failure
-        self.allowed_actions = (
-            None if allowed_actions is None else set(allowed_actions)
-        )
+        self.allowed_actions = None if allowed_actions is None else set(allowed_actions)
         if max_executed_mouse_actions is not None and max_executed_mouse_actions < 0:
             raise ValueError("max_executed_mouse_actions must be zero or greater")
         self.max_executed_mouse_actions = max_executed_mouse_actions
         self.additional_system_prompt = additional_system_prompt
         self.report_dir = report_dir
         self.report = None
-        self.last_user_prompt = None
-        self.last_system_prompt = None
-        self.last_tool_call = None
-        self.last_action_record = None
         self.screenshot_dir = Path(screenshot_dir)
-        
+
         # Create screenshot directory
         if self.save_screenshots:
             self.screenshot_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Initialize computer use tool
         self.computer_use = ComputerUse(
-            cfg={
-                "display_width_px": 1000,  # Normalized coordinates
-                "display_height_px": 1000
-            }
+            cfg={"display_width_px": 1000, "display_height_px": 1000}  # Normalized coordinates
         )
         if self.allowed_actions is not None:
             unknown_actions = self.allowed_actions - self.computer_use.ACTIONS
             if unknown_actions:
                 raise ValueError(f"Unsupported allowed actions: {sorted(unknown_actions)}")
-        
-        # State tracking
-        self.iteration_count = 0
-        self.task_completed = False
-        self.task_status = None
-        self.task_answer = None
-        self.abort_reason = None
-        self.dry_run_action = None
-        self.approval_required_action = None
-        self.executed_mouse_actions = 0
-        self.last_action_overlay = None
-        self.last_mouse_verification = None
-        self.current_screenshot = None
-        self.current_task = None
-        self.conversation_history = []
-        self.action_history = []
-        
-        self.logger.info(f"Agent initialized with model: {model}")
+
+        # Build LangGraph
+        self.graph = build_agent_graph()
+
+        self.logger.info(f"Agent initialized with provider: {provider_type}, model: {model}")
         self.logger.info(f"Screen size: {screen_width}x{screen_height}")
-    
+
     def _get_system_prompt(self) -> str:
         """Get the general behavior prompt for the agent."""
         return config.SYSTEM_PROMPT
 
     def _with_additional_system_prompt(self, base_prompt: str) -> str:
         """Append optional application UI context to a system instruction."""
-        additional_prompt = getattr(self, 'additional_system_prompt', None)
+        additional_prompt = getattr(self, "additional_system_prompt", None)
         if not additional_prompt:
             return base_prompt
         return (
@@ -167,7 +160,7 @@ class SeeThinkActAgent:
             "Application-specific UI context:\n"
             f"{additional_prompt.strip()}"
         )
-    
+
     def _prepare_tools(self) -> List[Dict[str, Any]]:
         """Prepare tool definitions for Ollama"""
         # Convert ComputerUse function to Ollama tool format
@@ -176,27 +169,25 @@ class SeeThinkActAgent:
         if self.allowed_actions is not None:
             action_schema = parameters["properties"]["action"]
             action_schema["enum"] = [
-                action
-                for action in action_schema.get("enum", [])
-                if action in self.allowed_actions
+                action for action in action_schema.get("enum", []) if action in self.allowed_actions
             ]
             allowed_list = ", ".join(action_schema["enum"])
             action_schema["description"] = (
                 f"{action_schema.get('description', '').rstrip()}\n\n"
                 f"For this task, only these actions are allowed: {allowed_list}."
             )
-        
+
         tool = {
             "type": "function",
             "function": {
                 "name": computer_function["name"],
                 "description": computer_function["description"],
-                "parameters": parameters
-            }
+                "parameters": parameters,
+            },
         }
-        
+
         return [tool]
-    
+
     def _save_screenshot(self, image, prefix: str = "screenshot") -> str:
         """Save screenshot with timestamp"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -205,26 +196,26 @@ class SeeThinkActAgent:
         image.save(filepath)
         self.logger.info(f"Screenshot saved: {filepath}")
         return str(filepath)
-    
+
     def _capture_current_state(self):
         """Capture current screenshot"""
         self.logger.info("Capturing screenshot...")
         screenshot = self.screenshot_capture.capture_screen()
         self.current_screenshot = screenshot
         self.current_screenshot_path = None
-        
+
         if self.save_screenshots:
             self.current_screenshot_path = self._save_screenshot(screenshot)
-        
+
         return screenshot
 
     def _render_action_overlay(self, arguments: Dict[str, Any]):
         """Render the planned mouse position on the screenshot used for the decision."""
-        if arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+        if arguments.get("action") not in self.computer_use.MOUSE_ACTIONS:
             return None
 
-        screenshot = getattr(self, 'current_screenshot', None)
-        coordinate = arguments.get('coordinate')
+        screenshot = getattr(self, "current_screenshot", None)
+        coordinate = arguments.get("coordinate")
         if screenshot is None or not coordinate:
             return None
 
@@ -255,9 +246,9 @@ class SeeThinkActAgent:
 
     def _save_action_overlay(self, arguments: Dict[str, Any]) -> Optional[str]:
         """Save the marked planned mouse position for review and debugging."""
-        if not getattr(self, 'save_screenshots', False):
+        if not getattr(self, "save_screenshots", False):
             return None
-        if not getattr(self, 'save_action_overlays', False):
+        if not getattr(self, "save_action_overlays", False):
             return None
 
         overlay = self._render_action_overlay(arguments)
@@ -272,28 +263,30 @@ class SeeThinkActAgent:
     @staticmethod
     def _prepare_mouse_verification_tools() -> List[Dict[str, Any]]:
         """Prepare the tool that records approval of one marked mouse target."""
-        return [{
-            "type": "function",
-            "function": {
-                "name": "verify_mouse_target",
-                "description": "Approve or reject the marked target of a proposed mouse action.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "decision": {
-                            "type": "string",
-                            "enum": ["approve", "reject"],
-                            "description": "Approve only if the marker is on the requested target.",
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "verify_mouse_target",
+                    "description": "Approve or reject the marked target of a proposed mouse action.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "decision": {
+                                "type": "string",
+                                "enum": ["approve", "reject"],
+                                "description": "Approve only if the marker is on the requested target.",
+                            },
+                            "reason": {
+                                "type": "string",
+                                "description": "Short visual reason for the decision.",
+                            },
                         },
-                        "reason": {
-                            "type": "string",
-                            "description": "Short visual reason for the decision.",
-                        },
+                        "required": ["decision", "reason"],
                     },
-                    "required": ["decision", "reason"],
                 },
-            },
-        }]
+            }
+        ]
 
     @staticmethod
     def _extract_action_intent(response: Dict[str, Any]) -> str:
@@ -317,7 +310,7 @@ class SeeThinkActAgent:
 
     def _run_mouse_target_verification(self, prompt: str, overlay) -> Dict[str, Any]:
         """Run the structured verifier for one marked screenshot."""
-        response = self.ollama_client.chat_with_image(
+        response = self.llm_provider.chat_with_image(
             user_query=prompt,
             image=overlay,
             system_prompt=self._with_additional_system_prompt(
@@ -325,20 +318,20 @@ class SeeThinkActAgent:
             ),
             tools=self._prepare_mouse_verification_tools(),
         )
-        tool_call = self.ollama_client.parse_computer_use_action(response)
+        tool_call = self.llm_provider.parse_computer_use_action(response)
         if not tool_call:
             return {
                 "decision": "reject",
                 "reason": "No structured target verification was returned.",
             }
 
-        if 'function' in tool_call:
-            details = tool_call['function']
-            name = details.get('name')
-            verification = details.get('arguments', {})
+        if "function" in tool_call:
+            details = tool_call["function"]
+            name = details.get("name")
+            verification = details.get("arguments", {})
         else:
-            name = tool_call.get('name')
-            verification = tool_call.get('arguments', {})
+            name = tool_call.get("name")
+            verification = tool_call.get("arguments", {})
 
         if isinstance(verification, str):
             try:
@@ -388,9 +381,7 @@ class SeeThinkActAgent:
             prompt += " " + extra_instruction
         return prompt
 
-    def _verify_mouse_target(
-        self, arguments: Dict[str, Any], action_intent: str = ""
-    ) -> bool:
+    def _verify_mouse_target(self, arguments: Dict[str, Any], action_intent: str = "") -> bool:
         """Ask the model to verify a marked target before a real mouse action."""
         if arguments.get("action") == "left_click_drag" and arguments.get("start_coordinate"):
             source_arguments = dict(arguments)
@@ -418,9 +409,7 @@ class SeeThinkActAgent:
                     "source text described by the action intent."
                 ),
             )
-            source_verification = self._run_mouse_target_verification(
-                source_prompt, source_overlay
-            )
+            source_verification = self._run_mouse_target_verification(source_prompt, source_overlay)
             if source_verification["decision"] != "approve":
                 self.last_mouse_verification = {
                     "decision": "reject",
@@ -430,9 +419,7 @@ class SeeThinkActAgent:
                     ),
                     "source": source_verification,
                 }
-                self.logger.info(
-                    f"Mouse target verification: {self.last_mouse_verification}"
-                )
+                self.logger.info(f"Mouse target verification: {self.last_mouse_verification}")
                 return False
 
             target_prompt = self._mouse_verification_prompt(
@@ -446,9 +433,7 @@ class SeeThinkActAgent:
                     "or source list, reject it."
                 ),
             )
-            target_verification = self._run_mouse_target_verification(
-                target_prompt, target_overlay
-            )
+            target_verification = self._run_mouse_target_verification(target_prompt, target_overlay)
             if target_verification["decision"] != "approve":
                 self.last_mouse_verification = {
                     "decision": "reject",
@@ -459,9 +444,7 @@ class SeeThinkActAgent:
                     "source": source_verification,
                     "target": target_verification,
                 }
-                self.logger.info(
-                    f"Mouse target verification: {self.last_mouse_verification}"
-                )
+                self.logger.info(f"Mouse target verification: {self.last_mouse_verification}")
                 return False
 
             self.last_mouse_verification = {
@@ -470,9 +453,7 @@ class SeeThinkActAgent:
                 "source": source_verification,
                 "target": target_verification,
             }
-            self.logger.info(
-                f"Mouse target verification: {self.last_mouse_verification}"
-            )
+            self.logger.info(f"Mouse target verification: {self.last_mouse_verification}")
             return True
 
         overlay = self._render_action_overlay(arguments)
@@ -496,9 +477,7 @@ class SeeThinkActAgent:
                 "centered on the intended source row/text, not on its upper edge, "
                 "neighbor row, or pane title."
             )
-        prompt = self._mouse_verification_prompt(
-            arguments, action_intent, extra_instruction
-        )
+        prompt = self._mouse_verification_prompt(arguments, action_intent, extra_instruction)
         verification = self._run_mouse_target_verification(prompt, overlay)
 
         self.last_mouse_verification = verification
@@ -559,57 +538,59 @@ class SeeThinkActAgent:
     def _abort_task(self, reason: str) -> None:
         """Stop the task for a safety or progress reason."""
         self.task_completed = True
-        self.task_status = 'aborted'
+        self.task_status = "aborted"
         self.abort_reason = reason
         self.logger.warning(f"Task aborted: {reason}")
 
     def _is_action_allowed(self, arguments: Dict[str, Any]) -> bool:
         """Return whether the active task policy permits an action."""
-        allowed_actions = getattr(self, 'allowed_actions', None)
-        return allowed_actions is None or arguments.get('action') in allowed_actions
+        allowed_actions = getattr(self, "allowed_actions", None)
+        return allowed_actions is None or arguments.get("action") in allowed_actions
 
     def _mouse_action_budget_reached(self, arguments: Dict[str, Any]) -> bool:
         """Return whether another planned mouse action needs external approval."""
-        limit = getattr(self, 'max_executed_mouse_actions', None)
-        if limit is None or arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+        limit = getattr(self, "max_executed_mouse_actions", None)
+        if limit is None or arguments.get("action") not in self.computer_use.MOUSE_ACTIONS:
             return False
-        return getattr(self, 'executed_mouse_actions', 0) >= limit
+        return getattr(self, "executed_mouse_actions", 0) >= limit
 
     @staticmethod
     def _is_executable_action(arguments: Dict[str, Any]) -> bool:
         """Return whether the action can modify or navigate the desktop."""
-        return arguments.get('action') not in {'wait', 'checkpoint', 'answer', 'terminate'}
+        return arguments.get("action") not in {"wait", "checkpoint", "answer", "terminate"}
 
     def _would_repeat_action_excessively(self, arguments: Dict[str, Any]) -> bool:
         """Detect an identical executable action proposed too many times in succession."""
-        max_repeats = getattr(self, 'max_repeated_actions', 0)
+        max_repeats = getattr(self, "max_repeated_actions", 0)
         if max_repeats <= 0 or not self._is_executable_action(arguments):
             return False
 
         previous_matches = 0
         for entry in reversed(self.action_history):
-            if not self._is_executable_action(entry['arguments']):
+            if not self._is_executable_action(entry["arguments"]):
                 break
-            if entry['arguments'] != arguments:
+            if entry["arguments"] != arguments:
                 break
             previous_matches += 1
 
         return previous_matches >= max_repeats
 
-    def _would_repeat_same_mouse_target_after_wait(self, arguments: Dict[str, Any]) -> Optional[str]:
+    def _would_repeat_same_mouse_target_after_wait(
+        self, arguments: Dict[str, Any]
+    ) -> Optional[str]:
         """Detect an unchanged mouse target retried after only passive observations."""
-        if arguments.get('action') not in self.computer_use.MOUSE_ACTIONS:
+        if arguments.get("action") not in self.computer_use.MOUSE_ACTIONS:
             return None
 
-        coordinate = arguments.get('coordinate')
+        coordinate = arguments.get("coordinate")
         intent = self._action_intent_from_arguments(arguments)
         if coordinate is None or intent is None:
             return None
 
-        passive_actions = {'wait', 'checkpoint'}
+        passive_actions = {"wait", "checkpoint"}
         for entry in reversed(self.action_history):
-            previous = entry.get('arguments', {})
-            previous_action = previous.get('action')
+            previous = entry.get("arguments", {})
+            previous_action = previous.get("action")
             if previous_action in passive_actions:
                 continue
             if previous_action not in self.computer_use.MOUSE_ACTIONS:
@@ -617,8 +598,8 @@ class SeeThinkActAgent:
 
             previous_intent = self._action_intent_from_arguments(previous)
             if (
-                previous_action == arguments.get('action')
-                and previous.get('coordinate') == coordinate
+                previous_action == arguments.get("action")
+                and previous.get("coordinate") == coordinate
                 and previous_intent == intent
             ):
                 return (
@@ -633,15 +614,15 @@ class SeeThinkActAgent:
 
     def _has_too_many_failures(self) -> bool:
         """Detect consecutive failed executable actions."""
-        max_failures = getattr(self, 'max_consecutive_failures', 0)
+        max_failures = getattr(self, "max_consecutive_failures", 0)
         if max_failures <= 0:
             return False
 
         failures = 0
         for entry in reversed(self.action_history):
-            if not self._is_executable_action(entry['arguments']):
+            if not self._is_executable_action(entry["arguments"]):
                 break
-            if entry['outcome'] != 'failed':
+            if entry["outcome"] != "failed":
                 break
             failures += 1
 
@@ -649,25 +630,25 @@ class SeeThinkActAgent:
 
     def _runtime_limit_reached(self, start_time: float) -> bool:
         """Check and apply the configured runtime safety limit."""
-        max_duration = getattr(self, 'max_task_duration', 0)
+        max_duration = getattr(self, "max_task_duration", 0)
         if max_duration > 0 and time.time() - start_time >= max_duration:
             self._abort_task(f"maximum task duration of {max_duration} seconds exceeded")
             return True
         return False
-    
+
     def _think_and_decide(self, task: str, screenshot) -> Dict[str, Any]:
         """
         Send screenshot to model and get decision
-        
+
         Args:
             task: The user's task
             screenshot: PIL Image of current screen
-            
+
         Returns:
             Response from the model
         """
         self.logger.info("Thinking and deciding next action...")
-        
+
         # Build the prompt
         if self.iteration_count == 1:
             user_prompt = f"Task: {task}\n\nThis is the current state of the desktop. What should I do first to accomplish this task?"
@@ -678,33 +659,30 @@ class SeeThinkActAgent:
         system_prompt = self._with_additional_system_prompt(self._get_system_prompt())
         self.last_user_prompt = user_prompt
         self.last_system_prompt = system_prompt
-        
+
         # Prepare tools
         tools = self._prepare_tools()
-        
+
         # Get response from model
         try:
             response = self.ollama_client.chat_with_image(
-                user_query=user_prompt,
-                image=screenshot,
-                system_prompt=system_prompt,
-                tools=tools
+                user_query=user_prompt, image=screenshot, system_prompt=system_prompt, tools=tools
             )
-            
+
             self.logger.info(f"Model response: {response}")
             return response
-            
+
         except Exception as e:
             self.logger.error(f"Error in model inference: {e}")
             raise
-    
+
     def _execute_action(self, response: Dict[str, Any]) -> bool:
         """
         Execute the action decided by the model
-        
+
         Args:
             response: Response from the model
-            
+
         Returns:
             True if action executed successfully
         """
@@ -714,29 +692,29 @@ class SeeThinkActAgent:
         self.last_action_overlay = None
         self.last_mouse_verification = None
         action_intent = self._extract_action_intent(response)
-        action = self.ollama_client.parse_computer_use_action(response)
+        action = self.llm_provider.parse_computer_use_action(response)
         self.last_tool_call = action
-        
+
         if not action:
             self.logger.warning("No action found in response")
-            if 'message' in response and 'content' in response['message']:
-                content = response['message']['content']
+            if "message" in response and "content" in response["message"]:
+                content = response["message"]["content"]
                 self.logger.info(f"Model response: {content}")
 
             return False
-        
+
         # Extract action details
-        if 'function' in action:
-            action_details = action['function']
-            action_name = action_details.get('name')
-            
-            if isinstance(action_details.get('arguments'), str):
-                arguments = json.loads(action_details['arguments'])
+        if "function" in action:
+            action_details = action["function"]
+            action_name = action_details.get("name")
+
+            if isinstance(action_details.get("arguments"), str):
+                arguments = json.loads(action_details["arguments"])
             else:
-                arguments = action_details.get('arguments', {})
+                arguments = action_details.get("arguments", {})
         else:
-            arguments = action.get('arguments', {})
-            action_name = action.get('name')
+            arguments = action.get("arguments", {})
+            action_name = action.get("name")
 
         if action_name != self.computer_use.name:
             self.logger.warning(f"Rejected unexpected tool call: {action_name!r}")
@@ -751,50 +729,48 @@ class SeeThinkActAgent:
         verification_intent = report_intent or action_intent
 
         if not self._is_action_allowed(arguments):
-            self._record_action(arguments, 'blocked_policy', intent=report_intent)
-            self._abort_task(
-                f"action not permitted by active policy: {arguments.get('action')}"
-            )
+            self._record_action(arguments, "blocked_policy", intent=report_intent)
+            self._abort_task(f"action not permitted by active policy: {arguments.get('action')}")
             return False
-        
+
         # Check for termination
-        if arguments.get('action') == 'terminate':
-            status = arguments.get('status')
+        if arguments.get("action") == "terminate":
+            status = arguments.get("status")
             self._record_action(arguments, status, intent=report_intent)
             self.task_completed = True
             self.task_status = status
             self.logger.info(f"Task terminated with status: {self.task_status}")
             return True
-        
+
         # Check for answer action (just observation)
-        if arguments.get('action') == 'answer':
-            answer_text = arguments.get('text', '')
-            self._record_action(arguments, 'answered', intent=report_intent)
+        if arguments.get("action") == "answer":
+            answer_text = arguments.get("text", "")
+            self._record_action(arguments, "answered", intent=report_intent)
             self.task_completed = True
-            self.task_status = 'answered'
+            self.task_status = "answered"
             self.task_answer = answer_text
             self.logger.info(f"Model's answer: {answer_text}")
             return True
 
         # Record an intermediate visual confirmation without ending the task
-        if arguments.get('action') == 'checkpoint':
-            checkpoint_text = arguments.get('text', '')
-            self._record_action(arguments, 'observed', intent=report_intent)
+        if arguments.get("action") == "checkpoint":
+            checkpoint_text = arguments.get("text", "")
+            self._record_action(arguments, "observed", intent=report_intent)
             self.logger.info(f"Checkpoint recorded: {checkpoint_text}")
             return True
 
         overlay_path = self._save_action_overlay(arguments)
 
         if self.dry_run and self._is_executable_action(arguments):
-            self._record_action(arguments, 'dry_run', overlay_path, report_intent)
+            self._record_action(arguments, "dry_run", overlay_path, report_intent)
             self.task_completed = True
-            self.task_status = 'dry_run'
+            self.task_status = "dry_run"
             self.dry_run_action = dict(arguments)
             self.logger.info(f"Dry run: would execute action: {arguments}")
             return True
 
         if self._would_repeat_action_excessively(arguments):
-            self._record_action(arguments, 'blocked_repetition', overlay_path, report_intent)
+            self._record_action(arguments, "blocked_repetition", overlay_path, report_intent)
             self._abort_task(
                 f"action repeated more than {self.max_repeated_actions} times: "
                 f"{arguments.get('action')}"
@@ -805,7 +781,7 @@ class SeeThinkActAgent:
         if mouse_repeat_reason:
             self._record_action(
                 arguments,
-                'blocked_repetition',
+                "blocked_repetition",
                 overlay_path,
                 report_intent,
                 mouse_repeat_reason,
@@ -813,8 +789,8 @@ class SeeThinkActAgent:
             return False
 
         if (
-            arguments.get('action') in self.computer_use.MOUSE_ACTIONS
-            and getattr(self, 'verify_mouse_targets', False)
+            arguments.get("action") in self.computer_use.MOUSE_ACTIONS
+            and getattr(self, "verify_mouse_targets", False)
             and not self._verify_mouse_target(arguments, verification_intent)
         ):
             verification_reason = self.last_mouse_verification.get(
@@ -823,12 +799,12 @@ class SeeThinkActAgent:
             )
             self._record_action(
                 arguments,
-                'blocked_verification',
+                "blocked_verification",
                 overlay_path,
                 report_intent,
                 verification_reason,
             )
-            if getattr(self, 'abort_on_mouse_verification_failure', False):
+            if getattr(self, "abort_on_mouse_verification_failure", False):
                 self._abort_task(
                     "mouse target verification rejected the proposed action: "
                     f"{verification_reason}"
@@ -836,24 +812,23 @@ class SeeThinkActAgent:
             return False
 
         if self._mouse_action_budget_reached(arguments):
-            self._record_action(arguments, 'approval_required', overlay_path, report_intent)
+            self._record_action(arguments, "approval_required", overlay_path, report_intent)
             self.task_completed = True
-            self.task_status = 'approval_required'
+            self.task_status = "approval_required"
             self.approval_required_action = dict(arguments)
             self.logger.info(f"Approval required before mouse action: {arguments}")
             return True
-        
+
         # Execute the action
         self.logger.info(f"Executing action: {arguments}")
-        if arguments.get('action') in self.computer_use.MOUSE_ACTIONS:
-            self.executed_mouse_actions = getattr(self, 'executed_mouse_actions', 0) + 1
-        success = self.action_executor.execute_computer_use_action({
-            'name': action_name,
-            'arguments': arguments
-        })
+        if arguments.get("action") in self.computer_use.MOUSE_ACTIONS:
+            self.executed_mouse_actions = getattr(self, "executed_mouse_actions", 0) + 1
+        success = self.action_executor.execute_computer_use_action(
+            {"name": action_name, "arguments": arguments}
+        )
         self._record_action(
             arguments,
-            'executed' if success else 'failed',
+            "executed" if success else "failed",
             overlay_path,
             report_intent,
         )
@@ -862,16 +837,16 @@ class SeeThinkActAgent:
             self._abort_task(
                 f"{self.max_consecutive_failures} consecutive action executions failed"
             )
-        
+
         # Wait a bit after action for UI to update
-        if success and arguments.get('action') != 'wait':
+        if success and arguments.get("action") != "wait":
             time.sleep(self.post_action_delay)
-        
+
         return success
 
     def _start_report(self, task: str) -> None:
         """Create a per-run HTML report when reporting is configured."""
-        report_dir = getattr(self, 'report_dir', None)
+        report_dir = getattr(self, "report_dir", None)
         if report_dir is None:
             self.report = None
             return
@@ -889,194 +864,123 @@ class SeeThinkActAgent:
                 "screenshot_dir": str(self.screenshot_dir),
                 "allowed_actions": sorted(self.allowed_actions) if self.allowed_actions else None,
                 "verify_mouse_targets": self.verify_mouse_targets,
-                "abort_on_mouse_verification_failure": (
-                    self.abort_on_mouse_verification_failure
-                ),
+                "abort_on_mouse_verification_failure": (self.abort_on_mouse_verification_failure),
             },
         )
 
     def _record_iteration_report(self, response: Dict[str, Any], action_success: bool) -> None:
         """Append one iteration snapshot to the HTML report."""
-        report = getattr(self, 'report', None)
+        report = getattr(self, "report", None)
         if report is None:
             return
 
-        action_record = getattr(self, 'last_action_record', None)
-        report.add_iteration({
-            "iteration": self.iteration_count,
-            "timestamp": getattr(
-                self,
-                'current_iteration_started_at',
-                datetime.now().isoformat(timespec="seconds"),
-            ),
-            "screenshot_path": getattr(self, 'current_screenshot_path', None),
-            "overlay_path": (action_record or {}).get("overlay_path"),
-            "user_prompt": getattr(self, 'last_user_prompt', None),
-            "system_prompt": getattr(self, 'last_system_prompt', None),
-            "response": response,
-            "tool_call": getattr(self, 'last_tool_call', None),
-            "action_record": action_record,
-            "mouse_verification": getattr(self, 'last_mouse_verification', None),
-            "action_success": action_success,
-        })
+        action_record = getattr(self, "last_action_record", None)
+        report.add_iteration(
+            {
+                "iteration": self.iteration_count,
+                "timestamp": getattr(
+                    self,
+                    "current_iteration_started_at",
+                    datetime.now().isoformat(timespec="seconds"),
+                ),
+                "screenshot_path": getattr(self, "current_screenshot_path", None),
+                "overlay_path": (action_record or {}).get("overlay_path"),
+                "user_prompt": getattr(self, "last_user_prompt", None),
+                "system_prompt": getattr(self, "last_system_prompt", None),
+                "response": response,
+                "tool_call": getattr(self, "last_tool_call", None),
+                "action_record": action_record,
+                "mouse_verification": getattr(self, "last_mouse_verification", None),
+                "action_success": action_success,
+            }
+        )
 
     def _finish_report(self, result: Dict[str, Any]) -> None:
         """Write final result and expose the report path in the run result."""
-        report = getattr(self, 'report', None)
+        report = getattr(self, "report", None)
         if report is None:
             return
 
         result["report_path"] = str(report.report_path)
         report.finish(result)
-    
+
     def run(self, task: str) -> Dict[str, Any]:
         """
-        Run the agent to complete the given task
-        
+        Run the agent to complete the given task using LangGraph.
+
         Args:
             task: The task to complete
-            
+
         Returns:
             Dictionary with results including success status and message
         """
         self.logger.info(f"=" * 80)
         self.logger.info(f"Starting task: {task}")
         self.logger.info(f"=" * 80)
-        
-        # Reset state
-        self.iteration_count = 0
-        self.task_completed = False
-        self.task_status = None
-        self.task_answer = None
-        self.abort_reason = None
-        self.dry_run_action = None
-        self.approval_required_action = None
-        self.executed_mouse_actions = 0
-        self.last_action_overlay = None
-        self.last_mouse_verification = None
-        self.current_screenshot = None
-        self.current_screenshot_path = None
-        self.current_task = task
-        self.conversation_history = []
-        self.action_history = []
-        self._start_report(task)
-        
-        start_time = time.time()
-        
+
+        # Build config dict for the graph
+        graph_config = {
+            "max_iterations": self.max_iterations,
+            "max_task_duration": self.max_task_duration,
+            "max_repeated_actions": self.max_repeated_actions,
+            "max_consecutive_failures": self.max_consecutive_failures,
+            "iteration_delay": self.iteration_delay,
+            "post_action_delay": self.post_action_delay,
+            "dry_run": self.dry_run,
+            "save_screenshots": self.save_screenshots,
+            "save_action_overlays": self.save_action_overlays,
+            "verify_mouse_targets": self.verify_mouse_targets,
+            "abort_on_mouse_verification_failure": self.abort_on_mouse_verification_failure,
+            "allowed_actions": self.allowed_actions,
+            "max_executed_mouse_actions": self.max_executed_mouse_actions,
+            "screenshot_dir": str(self.screenshot_dir),
+            "system_prompt": config.SYSTEM_PROMPT,
+            "additional_system_prompt": self.additional_system_prompt,
+        }
+
+        # Create initial state
+        initial_state = create_initial_state(
+            task=task,
+            config=graph_config,
+            llm_provider=self.llm_provider,
+            action_executor=self.action_executor,
+            screenshot_capture=self.screenshot_capture,
+            report_dir=self.report_dir,
+        )
+
+        # Run the graph
         try:
-            while self.iteration_count < self.max_iterations and not self.task_completed:
-                if self._runtime_limit_reached(start_time):
-                    break
+            final_state = self.graph.invoke(initial_state)
+            result = finalize_state(final_state)
 
-                self.iteration_count += 1
-                self.current_iteration_started_at = datetime.now().isoformat(timespec="seconds")
-                self.logger.info(f"\n{'=' * 80}")
-                self.logger.info(f"Iteration {self.iteration_count}/{self.max_iterations}")
-                self.logger.info(f"{'=' * 80}")
-                
-                # Step 1: SEE - Capture screenshot
-                screenshot = self._capture_current_state()
-                
-                # Step 2: THINK - Analyze and decide
-                response = self._think_and_decide(task, screenshot)
-                
-                # Store in conversation history
-                self.conversation_history.append({
-                    'iteration': self.iteration_count,
-                    'response': response
-                })
-                
-                # Step 3: ACT - Execute action
-                success = self._execute_action(response)
-                self._record_iteration_report(response, success)
-                
-                if not success and not self.task_completed:
-                    self.logger.warning("Action execution failed, but continuing...")
-                
-                # Small delay between iterations
-                time.sleep(self.iteration_delay)
+            self.logger.info(f"\n{'=' * 80}")
+            self.logger.info(f"TASK COMPLETED: {result['message']}")
+            self.logger.info(f"Status: {result['status']}")
+            self.logger.info(f"Time: {result['elapsed_time']:.2f} seconds")
+            self.logger.info(f"{'=' * 80}\n")
 
-                if not self.task_completed:
-                    self._runtime_limit_reached(start_time)
-            
-            # Task completion
-            elapsed_time = time.time() - start_time
-            
-            if self.task_completed:
-                message = f'Task completed in {self.iteration_count} iterations'
-                if self.task_status == 'aborted':
-                    message = f'Task aborted: {self.abort_reason}'
-                elif self.task_status == 'dry_run':
-                    message = (
-                        'Dry run stopped before executing proposed action: '
-                        f"{self.dry_run_action.get('action')}"
-                    )
-                elif self.task_status == 'approval_required':
-                    message = (
-                        'Approval required before executing proposed mouse action: '
-                        f"{self.approval_required_action.get('action')}"
-                    )
-                result = {
-                    'success': self.task_status in {'success', 'answered'},
-                    'status': self.task_status,
-                    'message': message,
-                    'iterations': self.iteration_count,
-                    'elapsed_time': elapsed_time
-                }
-                if self.abort_reason is not None:
-                    result['reason'] = self.abort_reason
-                if self.task_answer is not None:
-                    result['answer'] = self.task_answer
-                if self.dry_run_action is not None:
-                    result['proposed_action'] = self.dry_run_action
-                if self.approval_required_action is not None:
-                    result['proposed_action'] = self.approval_required_action
-                if self.last_action_overlay is not None:
-                    result['last_action_overlay'] = self.last_action_overlay
-                if self.last_mouse_verification is not None:
-                    result['last_mouse_verification'] = self.last_mouse_verification
-                self.logger.info(f"\n{'=' * 80}")
-                self.logger.info(f"TASK COMPLETED: {result['message']}")
-                self.logger.info(f"Status: {self.task_status}")
-                self.logger.info(f"Time: {elapsed_time:.2f} seconds")
-                self.logger.info(f"{'=' * 80}\n")
-            else:
-                result = {
-                    'success': False,
-                    'status': 'timeout',
-                    'message': f'Task did not complete within {self.max_iterations} iterations',
-                    'iterations': self.iteration_count,
-                    'elapsed_time': elapsed_time
-                }
-                self.logger.warning(f"\n{'=' * 80}")
-                self.logger.warning(f"TASK TIMEOUT: {result['message']}")
-                self.logger.warning(f"{'=' * 80}\n")
-
-            self._finish_report(result)
             return result
-            
+
         except KeyboardInterrupt:
             self.logger.info("\nTask interrupted by user")
             result = {
-                'success': False,
-                'status': 'interrupted',
-                'message': 'Task interrupted by user',
-                'iterations': self.iteration_count,
-                'elapsed_time': time.time() - start_time
+                "success": False,
+                "status": "interrupted",
+                "message": "Task interrupted by user",
+                "iterations": 0,
+                "elapsed_time": 0,
             }
-            self._finish_report(result)
             return result
-        
+
         except Exception as e:
             self.logger.error(f"Error during task execution: {e}", exc_info=True)
             result = {
-                'success': False,
-                'status': 'error',
-                'message': f'Error: {str(e)}',
-                'iterations': self.iteration_count,
-                'elapsed_time': time.time() - start_time
+                "success": False,
+                "status": "error",
+                "message": f"Error: {str(e)}",
+                "iterations": 0,
+                "elapsed_time": 0,
             }
-            self._finish_report(result)
             return result
 
 
@@ -1084,23 +988,23 @@ def main():
     """Example usage of the agent"""
     # Initialize agent
     agent = SeeThinkActAgent()
-    
+
     # Test connection
     if not agent.ollama_client.test_connection():
         print("\nWARNING: Could not connect to Ollama or model not found")
         print("Make sure Ollama is running and the model is pulled:")
         print(f"  ollama run {config.MODEL_NAME}")
         return
-    
+
     # Example task
     task = "Open Notepad and type 'Hello from AI Agent!'"
-    
+
     print(f"\nTask: {task}")
     print("Starting agent... (Press Ctrl+C to stop)\n")
-    
+
     # Run the agent
     result = agent.run(task)
-    
+
     # Print results
     print("\n" + "=" * 80)
     print("FINAL RESULT:")

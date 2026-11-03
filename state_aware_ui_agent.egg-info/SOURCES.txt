@@ -13,12 +13,14 @@ tests/test_agent_overlay.py
 tests/test_agent_prompt.py
 tests/test_agent_safety.py
 tests/test_agent_verification.py
+tests/test_config_loader.py
 tests/test_html_report.py
 tests/test_llm_providers.py
 tests/test_ollama_client.py
 utils/__init__.py
 utils/action_executor.py
 utils/agent_function_call.py
+utils/config_loader.py
 utils/html_report.py
 utils/ollama_client.py
 utils/screenshot_capture.py
