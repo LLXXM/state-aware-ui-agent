@@ -19,7 +19,7 @@ load_dotenv()
 # Provider selection: "ollama" | "openrouter" | "openai"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").lower()
 
-# Default models per provider (can be overridden via env)
+# Default models per provider (can be overridden via MODEL_NAME env var)
 DEFAULT_MODEL_BY_PROVIDER = {
     "ollama": "qwen3.5:397b-cloud",
     "openrouter": "qwen/qwen2.5-vl-72b-instruct",
@@ -43,7 +43,11 @@ OLLAMA_CHAT_MAX_RETRIES = int(os.getenv("OLLAMA_CHAT_MAX_RETRIES", "3"))
 OLLAMA_CHAT_RETRY_DELAY = float(os.getenv("OLLAMA_CHAT_RETRY_DELAY", "2.0"))
 OLLAMA_CHAT_RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
-# OpenRouter settings
+# ──────────────────────────────────────────────────────────────────────────────
+# Secrets / Environment-Specific Overrides (from .env only)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# OpenRouter - REQUIRED for openrouter provider
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_REFERER = os.getenv(
@@ -51,15 +55,15 @@ OPENROUTER_REFERER = os.getenv(
 )
 OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "State-aware-UI-agent")
 
-# OpenAI settings
+# OpenAI - REQUIRED for openai provider
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")  # Optional, for Azure/custom endpoints
 
-# Ollama settings
+# Ollama
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Agent Behavior Configuration
+# Agent Behavior Configuration (overridable via .env)
 # ──────────────────────────────────────────────────────────────────────────────
 
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "30"))
