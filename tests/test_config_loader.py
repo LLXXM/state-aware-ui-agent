@@ -307,7 +307,7 @@ class TestConfigModuleIntegration(unittest.TestCase):
         importlib.reload(config)
 
         self.assertEqual(config.LLM_PROVIDER, "openrouter")
-        self.assertEqual(config.MODEL_NAME, "qwen/qwen2.5-vl-72b-instruct")
+        self.assertEqual(config.MODEL_NAME, "nvidia/nemotron-3.5-super-vl")
         self.assertEqual(config.MAX_ITERATIONS, 30)
         self.assertTrue(config.DRY_RUN)
 
@@ -332,7 +332,7 @@ class TestProviderDefaultModels(unittest.TestCase):
         import config
 
         importlib.reload(config)
-        self.assertEqual(config.MODEL_NAME, "qwen/qwen2.5-vl-72b-instruct")
+        self.assertEqual(config.MODEL_NAME, "nvidia/nemotron-3.5-super-vl")
 
     def test_openai_default_model(self):
         os.environ["LLM_PROVIDER"] = "openai"

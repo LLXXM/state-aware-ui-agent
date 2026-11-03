@@ -22,7 +22,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter").lower()
 # Default models per provider (can be overridden via MODEL_NAME env var)
 DEFAULT_MODEL_BY_PROVIDER = {
     "ollama": "qwen3.5:397b-cloud",
-    "openrouter": "qwen/qwen2.5-vl-72b-instruct",
+    "openrouter": "nvidia/nemotron-3.5-super-vl",
     "openai": "gpt-4o",
 }
 
