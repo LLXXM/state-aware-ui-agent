@@ -79,7 +79,6 @@ class OpenRouterProvider(LLMProvider):
         self._option_mapping = {
             "temperature": "temperature",
             "num_predict": "max_tokens",
-            "num_ctx": "max_tokens",
             "top_p": "top_p",
             "top_k": "top_k",
         }
@@ -146,10 +145,10 @@ class OpenRouterProvider(LLMProvider):
         """Map internal options to OpenAI format."""
         mapped = {}
         for key, value in self.options.items():
-            openai_key = self._option_mapping.get(key, key)
-            if openai_key == "max_tokens" and key == "num_ctx":
-                # num_ctx is context window, not max tokens - skip or use a default
+            # Skip Ollama-specific options
+            if key == "num_ctx":
                 continue
+            openai_key = self._option_mapping.get(key, key)
             mapped[openai_key] = value
         return mapped
 
@@ -164,6 +163,7 @@ class OpenRouterProvider(LLMProvider):
         messages = self._build_messages(user_query, image, system_prompt)
         openai_tools = self._convert_tools(tools)
         options = self._map_options()
+        print(f"DEBUG openrouter options: {list(options.keys())}")
 
         # Make the request
         response = self._client.chat.completions.create(
@@ -218,11 +218,13 @@ class OpenRouterProvider(LLMProvider):
         """Verify connection to OpenRouter and model availability."""
         try:
             # Test with a simple chat request
+            options = self._map_options()
+            # Use a small max_tokens for connection test, override if present
+            options["max_tokens"] = 10
             response = self._client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": "Connection check. Reply with OK."}],
-                max_tokens=10,
-                **self._map_options(),
+                **options,
             )
             print(f"OK: Model '{self.model}' answered a chat request via OpenRouter")
             return True

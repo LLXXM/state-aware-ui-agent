@@ -41,9 +41,9 @@ CASE = UiTestCase(
     prepare_task=PREPARE_TASK,
     measurement_repetitions=1,
     app_context=CALCULATOR_CONTEXT,
-    allowed_actions=frozenset({
-        "left_click", "double_click", "type", "key", "wait", "checkpoint", "terminate"
-    }),
+    allowed_actions=frozenset(
+        {"left_click", "double_click", "type", "key", "wait", "checkpoint", "terminate"}
+    ),
     max_iterations=25,
     max_task_duration=180,
     max_repeated_actions=2,
@@ -58,11 +58,11 @@ CASE = UiTestCase(
     },
     pre_run_setup=make_setup_fn(
         launch_command="calc.exe",
-        wait_for_window=r"Calculator",
+        wait_for_window=r"(Calculator|Rechner)",
         minimize_all_first=True,
     ),
     post_run_cleanup=make_cleanup_fn(
-        close_window_title=r"Calculator",
+        close_window_title=r"(Calculator|Rechner)",
         restore_windows=True,
     ),
     report_dir_name="Reports",

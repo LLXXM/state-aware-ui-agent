@@ -40,12 +40,7 @@ def default_report_dir_for_case(case: UiTestCase) -> str:
     except ModuleNotFoundError:
         test_case_dir = Path(__file__).parent / "test_cases"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return str(
-        test_case_dir
-        / case.report_dir_name
-        / module_name
-        / f"{module_name}_{timestamp}"
-    )
+    return str(test_case_dir / case.report_dir_name / module_name / f"{module_name}_{timestamp}")
 
 
 def _screenshots_dir_for_report(report_dir: str | Path) -> str:
@@ -54,6 +49,8 @@ def _screenshots_dir_for_report(report_dir: str | Path) -> str:
 
 def _build_agent(case: UiTestCase, report_dir: str) -> SeeThinkActAgent:
     return SeeThinkActAgent(
+        provider_type=case.provider_type,
+        model=case.model,
         dry_run=False,
         max_iterations=case.max_iterations,
         save_screenshots=True,
@@ -63,9 +60,7 @@ def _build_agent(case: UiTestCase, report_dir: str) -> SeeThinkActAgent:
         max_consecutive_failures=case.max_consecutive_failures,
         iteration_delay=case.iteration_delay,
         post_action_delay=case.post_action_delay,
-        allowed_actions=(
-            None if case.allowed_actions is None else set(case.allowed_actions)
-        ),
+        allowed_actions=(None if case.allowed_actions is None else set(case.allowed_actions)),
         max_executed_mouse_actions=case.max_executed_mouse_actions,
         verify_mouse_targets=case.verify_mouse_targets,
         abort_on_mouse_verification_failure=case.abort_on_mouse_verification_failure,
@@ -82,11 +77,11 @@ def _run_case_workflow(
 ) -> dict[str, Any]:
     if not case.prepare_task:
         agent = _build_agent(case, report_dir)
-        if not agent.ollama_client.test_connection():
+        if not agent.llm_provider.test_connection():
             return {
                 "success": False,
                 "status": "connection_failed",
-                "message": "Ollama is unavailable or the configured model is missing.",
+                "message": "LLM provider is unavailable or the configured model is missing.",
             }
         return agent.run(case.task)
 
@@ -95,11 +90,11 @@ def _run_case_workflow(
         case,
         str(report_base / "preparation"),
     )
-    if not preparation_agent.ollama_client.test_connection():
+    if not preparation_agent.llm_provider.test_connection():
         return {
             "success": False,
             "status": "connection_failed",
-            "message": "Ollama is unavailable or the configured model is missing.",
+            "message": "LLM provider is unavailable or the configured model is missing.",
         }
 
     preparation = preparation_agent.run(case.prepare_task)
@@ -136,9 +131,8 @@ def _run_case_workflow(
         if run_result.get("status") != "success":
             break
 
-    measurement_succeeded = (
-        len(measurement_runs) == repetitions
-        and all(run.get("status") == "success" for run in measurement_runs)
+    measurement_succeeded = len(measurement_runs) == repetitions and all(
+        run.get("status") == "success" for run in measurement_runs
     )
     return {
         "success": measurement_succeeded,
@@ -225,9 +219,7 @@ def run_test_case(case: UiTestCase, report_dir: Optional[str] = None) -> dict[st
         )
     elif not cleanup_succeeded:
         result["status"] = "post_cleanup_failed"
-        result["message"] = (
-            f"Test case {case.case_id} completed, but cleanup did not succeed."
-        )
+        result["message"] = f"Test case {case.case_id} completed, but cleanup did not succeed."
     return result
 
 

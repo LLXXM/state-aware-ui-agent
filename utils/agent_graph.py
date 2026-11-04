@@ -112,7 +112,13 @@ def planner_node(state: AgentState) -> AgentState:
     """Create explicit plan by decomposing task into ordered steps."""
     config = state["config"]
     llm_provider: LLMProvider = state["config"]["llm_provider"]
+    screenshot_capture: ScreenshotCapture = state["config"]["screenshot_capture"]
     additional_system_prompt = config.get("additional_system_prompt")
+
+    # Capture screenshot if not already present
+    screenshot = state.get("screenshot")
+    if screenshot is None:
+        screenshot = screenshot_capture.capture_screen()
 
     # Build system prompt
     system_prompt = config.get("system_prompt", "")
@@ -136,7 +142,7 @@ def planner_node(state: AgentState) -> AgentState:
 
     response = llm_provider.chat_with_image(
         user_query=user_prompt,
-        image=state["screenshot"],
+        image=screenshot,
         system_prompt=planner_system_prompt,
         tools=None,  # No tools needed for planning
     )
@@ -166,6 +172,7 @@ def planner_node(state: AgentState) -> AgentState:
 
     return {
         **state,
+        "screenshot": screenshot,
         "plan": plan,
         "plan_step": 0,
         "completed_steps": [],
@@ -387,7 +394,10 @@ def act_node(state: AgentState) -> AgentState:
                     # Save overlay for mouse actions
                     overlay_path = None
                     if save_action_overlays and action_type in computer_use.MOUSE_ACTIONS:
-                        from utils.see_think_act_agent import SeeThinkActAgent
+                        # Import locally to avoid circular imports
+                        import see_think_act_agent as sta_module
+
+                        SeeThinkActAgent = sta_module.SeeThinkActAgent
 
                         # Render overlay
                         screenshot = state["screenshot"]
@@ -464,63 +474,77 @@ def act_node(state: AgentState) -> AgentState:
                             task_completed = True
                             task_status = "aborted"
                             abort_reason = f"action repeated more than {max_repeated_actions} times: {action_type}"
-                    # Mouse target verification
-                    elif verify_mouse_targets and action_type in computer_use.MOUSE_ACTIONS:
-                        # Simplified: just log and proceed for now
-                        # Full verification would need another LLM call with overlay
-                        action_result = {"success": True, "verified": False}
-                    # Mouse action budget
-                    elif (
-                        max_executed_mouse_actions is not None
-                        and action_type in computer_use.MOUSE_ACTIONS
-                    ):
-                        if executed_mouse_actions >= max_executed_mouse_actions:
-                            # Use LangGraph interrupt for human-in-the-loop approval
-                            interrupt_payload = {
-                                "action": "approval_required",
-                                "message": f"Mouse action budget exceeded ({max_executed_mouse_actions}). Human approval required for: {action_type}",
-                                "proposed_action": arguments,
-                                "action_type": action_type,
-                                "intent": intent,
-                                "executed_mouse_actions": executed_mouse_actions,
-                                "max_executed_mouse_actions": max_executed_mouse_actions,
-                            }
-                            # Interrupt pauses graph execution and waits for human input
-                            interrupt(interrupt_payload)
-                            # Execution resumes here after human provides input
-                            # The resume value is available as the return value of interrupt()
-                            resume_value = interrupt_payload  # interrupt() returns the resume value
-                            # Check if human approved
-                            if isinstance(resume_value, dict) and resume_value.get("approved"):
-                                # Human approved - proceed with execution
+                    else:
+                        # Execute action (after checks pass)
+                        # Mouse target verification
+                        if verify_mouse_targets and action_type in computer_use.MOUSE_ACTIONS:
+                            # Simplified: just log and proceed for now
+                            # Full verification would need another LLM call with overlay
+                            action_result = {"success": True, "verified": False}
+                            # Note: In full implementation, this would call interrupt() for verification
+                            # For now, we proceed with execution
+
+                        # Mouse action budget
+                        if (
+                            max_executed_mouse_actions is not None
+                            and action_type in computer_use.MOUSE_ACTIONS
+                        ):
+                            if executed_mouse_actions >= max_executed_mouse_actions:
+                                # Use LangGraph interrupt for human-in-the-loop approval
+                                interrupt_payload = {
+                                    "action": "approval_required",
+                                    "message": f"Mouse action budget exceeded ({max_executed_mouse_actions}). Human approval required for: {action_type}",
+                                    "proposed_action": arguments,
+                                    "action_type": action_type,
+                                    "intent": intent,
+                                    "executed_mouse_actions": executed_mouse_actions,
+                                    "max_executed_mouse_actions": max_executed_mouse_actions,
+                                }
+                                # Interrupt pauses graph execution and waits for human input
+                                interrupt(interrupt_payload)
+                                # Execution resumes here after human provides input
+                                resume_value = (
+                                    interrupt_payload  # interrupt() returns the resume value
+                                )
+                                # Check if human approved
+                                if isinstance(resume_value, dict) and resume_value.get("approved"):
+                                    # Human approved - proceed with execution
+                                    executed_mouse_actions += 1
+                                    success = action_executor.execute_computer_use_action(
+                                        {"name": action_name, "arguments": arguments}
+                                    )
+                                    action_result = {
+                                        "success": success,
+                                        "executed": True,
+                                        "approved": True,
+                                    }
+                                else:
+                                    # Human rejected or didn't approve
+                                    action_result = {
+                                        "success": False,
+                                        "reason": "Human rejected action",
+                                    }
+                                    task_completed = True
+                                    task_status = "aborted"
+                                    abort_reason = "Human rejected mouse action"
+                            else:
+                                # Budget not exceeded, execute normally
                                 executed_mouse_actions += 1
                                 success = action_executor.execute_computer_use_action(
                                     {"name": action_name, "arguments": arguments}
                                 )
-                                action_result = {
-                                    "success": success,
-                                    "executed": True,
-                                    "approved": True,
-                                }
-                            else:
-                                # Human rejected or didn't approve
-                                action_result = {
-                                    "success": False,
-                                    "reason": "Human rejected action",
-                                }
-                                task_completed = True
-                                task_status = "aborted"
-                                abort_reason = "Human rejected mouse action"
+                                action_result = {"success": success, "executed": True}
                         else:
-                            # Budget not exceeded, execute normally
-                            executed_mouse_actions += 1
+                            # No budget limit, execute normally
+                            if action_type in computer_use.MOUSE_ACTIONS:
+                                executed_mouse_actions += 1
                             success = action_executor.execute_computer_use_action(
                                 {"name": action_name, "arguments": arguments}
                             )
                             action_result = {"success": success, "executed": True}
 
                         # Check consecutive failures
-                        if not success and max_consecutive_failures > 0:
+                        if not action_result.get("success", False) and max_consecutive_failures > 0:
                             failures = 0
                             for entry in reversed(action_history):
                                 if entry["arguments"].get("action") in {
@@ -539,12 +563,18 @@ def act_node(state: AgentState) -> AgentState:
                                 abort_reason = f"{max_consecutive_failures} consecutive action executions failed"
 
                         # Post-action delay
-                        if success and action_type != "wait":
+                        if action_result.get("success") and action_type != "wait":
                             import time
 
                             time.sleep(config.get("post_action_delay", 1.0))
 
             # Record action
+            # Ensure action_result is never None
+            if action_result is None:
+                action_result = {
+                    "success": False,
+                    "reason": "Internal error: action_result not set",
+                }
             action_record = {
                 "iteration": iteration,
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
