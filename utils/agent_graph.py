@@ -25,6 +25,11 @@ class AgentState(TypedDict):
     # Task
     task: str
 
+    # Explicit Plan (Phase 3.1)
+    plan: Optional[List[str]]  # Ordered list of step descriptions
+    plan_step: int  # Current step index (0-based)
+    completed_steps: List[int]  # Indices of completed steps
+
     # Loop control
     iteration: int
     max_iterations: int
@@ -96,6 +101,70 @@ def see_node(state: AgentState) -> AgentState:
     }
 
 
+def planner_node(state: AgentState) -> AgentState:
+    """Create explicit plan by decomposing task into ordered steps."""
+    config = state["config"]
+    llm_provider: LLMProvider = state["config"]["llm_provider"]
+    additional_system_prompt = config.get("additional_system_prompt")
+
+    # Build system prompt
+    system_prompt = config.get("system_prompt", "")
+    if additional_system_prompt:
+        system_prompt = f"{system_prompt.rstrip()}\n\nApplication-specific UI context:\n{additional_system_prompt.strip()}"
+
+    planner_system_prompt = (
+        f"{system_prompt}\n\n"
+        "You are a task planner. Analyze the task and the current desktop state, "
+        "then break the task into a sequence of 5-15 concrete, atomic steps. "
+        "Each step should be a single actionable instruction (e.g., 'Click the Start button', "
+        "'Type \"notepad\" in the search box', 'Click the File menu'). "
+        "Output ONLY a JSON array of step strings. No extra text."
+    )
+
+    user_prompt = (
+        f"Task: {state['task']}\n\n"
+        "This is the current state of the desktop. Break this task into a sequence "
+        "of concrete steps to accomplish it. Return ONLY a JSON array of strings."
+    )
+
+    response = llm_provider.chat_with_image(
+        user_query=user_prompt,
+        image=state["screenshot"],
+        system_prompt=planner_system_prompt,
+        tools=None,  # No tools needed for planning
+    )
+
+    # Parse plan from response
+    content = response.get("message", {}).get("content", "").strip()
+    plan = []
+    try:
+        # Try to extract JSON array from content
+        import json
+
+        # Find JSON array in response
+        start = content.find("[")
+        end = content.rfind("]") + 1
+        if start >= 0 and end > start:
+            plan = json.loads(content[start:end])
+        else:
+            # Fallback: split by lines
+            plan = [line.strip("- ").strip() for line in content.split("\n") if line.strip()]
+    except (json.JSONDecodeError, ValueError):
+        # Fallback: split by lines
+        plan = [line.strip("- ").strip() for line in content.split("\n") if line.strip()]
+
+    # Ensure we have a valid plan
+    if not plan:
+        plan = [state["task"]]  # Fallback to single-step
+
+    return {
+        **state,
+        "plan": plan,
+        "plan_step": 0,
+        "completed_steps": [],
+    }
+
+
 def think_node(state: AgentState) -> AgentState:
     """Call LLM with screenshot and tools."""
     config = state["config"]
@@ -109,13 +178,50 @@ def think_node(state: AgentState) -> AgentState:
     if additional_system_prompt:
         system_prompt = f"{system_prompt.rstrip()}\n\nApplication-specific UI context:\n{additional_system_prompt.strip()}"
 
-    # Build user prompt
-    if state["iteration"] == 1:
-        user_prompt = f"Task: {state['task']}\n\nThis is the current state of the desktop. What should I do first to accomplish this task?"
-    else:
-        user_prompt = f"Task: {state['task']}\n\nThis is the current state after the previous action. What should I do next?"
+    # Build user prompt with explicit plan progress
+    plan = state.get("plan", [])
+    plan_step = state.get("plan_step", 0)
+    completed_steps = state.get("completed_steps", [])
 
-    # Add action history
+    if plan:
+        # Show plan with progress markers
+        plan_lines = []
+        for i, step in enumerate(plan):
+            if i in completed_steps:
+                marker = "✓"
+            elif i == plan_step:
+                marker = "→"
+            else:
+                marker = "○"
+            plan_lines.append(f"  {marker} {i+1}. {step}")
+        plan_display = "\n".join(plan_lines)
+
+        if state["iteration"] == 1:
+            user_prompt = (
+                f"Task: {state['task']}\n\n"
+                f"Plan ({len(plan)} steps):\n{plan_display}\n\n"
+                f"Current step: {plan_step + 1}/{len(plan)} — {plan[plan_step] if plan_step < len(plan) else 'Complete'}\n\n"
+                "This is the initial desktop state. Execute the current step."
+            )
+        else:
+            last_action = state["action_history"][-1] if state["action_history"] else None
+            last_intent = last_action.get("intent", "previous action") if last_action else "start"
+            user_prompt = (
+                f"Task: {state['task']}\n\n"
+                f"Plan ({len(plan)} steps):\n{plan_display}\n\n"
+                f"Current step: {plan_step + 1}/{len(plan)} — {plan[plan_step] if plan_step < len(plan) else 'Complete'}\n\n"
+                f"Previous action: {last_intent}\n"
+                "This is the current state after the previous action. Continue executing the current step, "
+                "or advance to the next step if the current one is complete."
+            )
+    else:
+        # Fallback: no plan available
+        if state["iteration"] == 1:
+            user_prompt = f"Task: {state['task']}\n\nThis is the current state of the desktop. What should I do first to accomplish this task?"
+        else:
+            user_prompt = f"Task: {state['task']}\n\nThis is the current state after the previous action. What should I do next?"
+
+    # Add action history (last 10 entries)
     if state["action_history"]:
         history_lines = []
         for entry in state["action_history"][-10:]:
@@ -418,6 +524,29 @@ def act_node(state: AgentState) -> AgentState:
                 action_record["overlay_path"] = overlay_path
             action_history.append(action_record)
 
+            # Advance plan step on successful execution of meaningful action
+            if action_result.get("success"):
+                plan = state.get("plan", [])
+                plan_step = state.get("plan_step", 0)
+                completed_steps = list(state.get("completed_steps", []))
+
+                # Mark step as completed for meaningful actions
+                # (not wait, checkpoint, answer, terminate which are meta-actions)
+                meaningful_action = action_type not in {"wait", "checkpoint", "answer", "terminate"}
+
+                # Also consider checkpoint as explicit step completion
+                is_checkpoint = action_type == "checkpoint"
+
+                if (meaningful_action or is_checkpoint) and plan_step < len(plan):
+                    if plan_step not in completed_steps:
+                        completed_steps.append(plan_step)
+                    # Advance to next step if not at end
+                    if plan_step + 1 < len(plan):
+                        plan_step = plan_step + 1
+                    else:
+                        # All steps done
+                        plan_step = len(plan)
+
     # Update report
     if report:
         report.add_iteration(
@@ -479,11 +608,13 @@ def build_agent_graph() -> StateGraph:
     """Build and compile the agent state graph."""
     graph = StateGraph(AgentState)
 
+    graph.add_node("planner", planner_node)
     graph.add_node("see", see_node)
     graph.add_node("think", think_node)
     graph.add_node("act", act_node)
 
-    graph.set_entry_point("see")
+    graph.set_entry_point("planner")
+    graph.add_edge("planner", "see")
     graph.add_edge("see", "think")
     graph.add_edge("think", "act")
     graph.add_conditional_edges(
@@ -538,6 +669,11 @@ def create_initial_state(
 
     return AgentState(
         task=task,
+        # Explicit Plan (Phase 3.1)
+        plan=[],
+        plan_step=0,
+        completed_steps=[],
+        # Loop control
         iteration=0,
         max_iterations=config.get("max_iterations", 30),
         task_completed=False,
@@ -546,24 +682,31 @@ def create_initial_state(
         abort_reason=None,
         dry_run_action=None,
         approval_required_action=None,
+        # Screenshot
         screenshot=None,
         screenshot_path=None,
+        # LLM response
         response=None,
         tool_call=None,
+        # Action result
         action_result=None,
         executed_mouse_actions=0,
         last_mouse_verification=None,
         last_action_overlay=None,
+        # History
         action_history=[],
         conversation_history=[],
+        # Config
         config={
             **config,
             "llm_provider": llm_provider,
             "action_executor": action_executor,
             "screenshot_capture": screenshot_capture,
         },
+        # Runtime
         start_time=datetime.now().timestamp(),
         current_iteration_started_at=None,
+        # Reporting
         report=report,
         report_dir=report_dir,
     )
