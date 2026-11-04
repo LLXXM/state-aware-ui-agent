@@ -105,7 +105,7 @@ class SeeThinkActAgent:
         # Get actual screen size for the specified monitor
         screen_width, screen_height = self.screenshot_capture.get_screen_size(monitor_number)
         self.action_executor = ActionExecutor(
-            screen_width=screen_width, screen_height=screen_height
+            screen_width=screen_width, screen_height=screen_height, monitor_number=monitor_number
         )
 
         # Configuration

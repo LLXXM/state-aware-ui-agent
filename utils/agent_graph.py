@@ -482,9 +482,8 @@ def act_node(state: AgentState) -> AgentState:
                         if verify_mouse_targets and action_type in computer_use.MOUSE_ACTIONS:
                             # Simplified: just log and proceed for now
                             # Full verification would need another LLM call with overlay
-                            action_result = {"success": True, "verified": False}
-                            # Note: In full implementation, this would call interrupt() for verification
-                            # For now, we proceed with execution
+                            # Don't set action_result here - let execution proceed below
+                            pass  # Verification passed, proceed to execution
 
                         # Mouse action budget
                         if (

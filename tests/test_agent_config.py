@@ -101,7 +101,9 @@ class AgentConfigTests(unittest.TestCase):
             model="custom-model",
             options={"temperature": 0},
         )
-        mock_action_executor.assert_called_once_with(screen_width=1280, screen_height=720)
+        mock_action_executor.assert_called_once_with(
+            screen_width=1280, screen_height=720, monitor_number=1
+        )
         self.assertEqual(agent.max_iterations, 7)
         self.assertEqual(agent.max_task_duration, 25)
         self.assertEqual(agent.max_repeated_actions, 1)

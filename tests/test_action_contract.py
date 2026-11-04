@@ -13,7 +13,9 @@ class ComputerUseSchemaTests(unittest.TestCase):
         self.assertEqual(function["name"], "computer_use")
         self.assertIn("normalized", parameters["coordinate"]["description"])
         self.assertIn("absolute", parameters["coordinate"]["description"])
-        self.assertIn("Neither coordinate is a relative offset", parameters["action"]["description"])
+        self.assertIn(
+            "Neither coordinate is a relative offset", parameters["action"]["description"]
+        )
         self.assertIn("offset", parameters["action"]["description"])
         self.assertIn("keys", parameters)
         self.assertIn("pixels", parameters)
@@ -25,35 +27,43 @@ class ComputerUseSchemaTests(unittest.TestCase):
         self.assertIn("intent", function["parameters"]["required"])
 
     def test_accepts_action_intent(self):
-        arguments = ComputerUse().validate_arguments({
-            "action": "wait",
-            "time": 2,
-            "intent": "Wait for the application to finish loading.",
-        })
+        arguments = ComputerUse().validate_arguments(
+            {
+                "action": "wait",
+                "time": 2,
+                "intent": "Wait for the application to finish loading.",
+            }
+        )
 
         self.assertEqual(arguments["intent"], "Wait for the application to finish loading.")
 
     def test_rejects_empty_action_intent(self):
         with self.assertRaises(ActionValidationError):
-            ComputerUse().validate_arguments({
-                "action": "wait",
-                "time": 2,
-                "intent": "",
-            })
+            ComputerUse().validate_arguments(
+                {
+                    "action": "wait",
+                    "time": 2,
+                    "intent": "",
+                }
+            )
 
     def test_runtime_still_accepts_legacy_action_without_intent(self):
-        arguments = ComputerUse().validate_arguments({
-            "action": "wait",
-            "time": 2,
-        })
+        arguments = ComputerUse().validate_arguments(
+            {
+                "action": "wait",
+                "time": 2,
+            }
+        )
 
         self.assertEqual(arguments["action"], "wait")
 
     def test_accepts_hotkey_arguments(self):
-        arguments = ComputerUse().validate_arguments({
-            "action": "key",
-            "keys": ["ctrl", "l"],
-        })
+        arguments = ComputerUse().validate_arguments(
+            {
+                "action": "key",
+                "keys": ["ctrl", "l"],
+            }
+        )
 
         self.assertEqual(arguments["keys"], ["ctrl", "l"])
 
@@ -62,52 +72,60 @@ class ComputerUseSchemaTests(unittest.TestCase):
             ComputerUse().validate_arguments({"action": "left_click"})
 
     def test_normalizes_click_alias_to_left_click(self):
-        arguments = ComputerUse().validate_arguments(
-            {"action": "click", "coordinate": [100, 200]}
-        )
+        arguments = ComputerUse().validate_arguments({"action": "click", "coordinate": [100, 200]})
 
         self.assertEqual(arguments["action"], "left_click")
 
     def test_rejects_coordinate_outside_normalized_range(self):
         with self.assertRaises(ActionValidationError):
-            ComputerUse().validate_arguments({
-                "action": "left_click",
-                "coordinate": [1500, 200],
-            })
+            ComputerUse().validate_arguments(
+                {
+                    "action": "left_click",
+                    "coordinate": [1500, 200],
+                }
+            )
 
     def test_accepts_drag_start_coordinate(self):
-        arguments = ComputerUse().validate_arguments({
-            "action": "left_click_drag",
-            "start_coordinate": [250, 900],
-            "coordinate": [750, 900],
-        })
+        arguments = ComputerUse().validate_arguments(
+            {
+                "action": "left_click_drag",
+                "start_coordinate": [250, 900],
+                "coordinate": [750, 900],
+            }
+        )
 
         self.assertEqual(arguments["start_coordinate"], [250, 900])
 
     def test_rejects_drag_without_start_coordinate(self):
         with self.assertRaises(ActionValidationError):
-            ComputerUse().validate_arguments({
-                "action": "left_click_drag",
-                "coordinate": [750, 900],
-            })
+            ComputerUse().validate_arguments(
+                {
+                    "action": "left_click_drag",
+                    "coordinate": [750, 900],
+                }
+            )
 
     def test_rejects_drag_start_coordinate_outside_normalized_range(self):
         with self.assertRaises(ActionValidationError):
-            ComputerUse().validate_arguments({
-                "action": "left_click_drag",
-                "start_coordinate": [250, 1200],
-                "coordinate": [750, 900],
-            })
+            ComputerUse().validate_arguments(
+                {
+                    "action": "left_click_drag",
+                    "start_coordinate": [250, 1200],
+                    "coordinate": [750, 900],
+                }
+            )
 
     def test_rejects_termination_without_status(self):
         with self.assertRaises(ActionValidationError):
             ComputerUse().validate_arguments({"action": "terminate"})
 
     def test_accepts_checkpoint_with_observation_text(self):
-        arguments = ComputerUse().validate_arguments({
-            "action": "checkpoint",
-            "text": "Recording indicator is green",
-        })
+        arguments = ComputerUse().validate_arguments(
+            {
+                "action": "checkpoint",
+                "text": "Recording indicator is green",
+            }
+        )
 
         self.assertEqual(arguments["action"], "checkpoint")
 
@@ -121,34 +139,53 @@ class ActionExecutorContractTests(unittest.TestCase):
         size_patcher = patch("utils.action_executor.pyautogui.size", return_value=(1920, 1080))
         self.addCleanup(size_patcher.stop)
         size_patcher.start()
-        self.executor = ActionExecutor(screen_width=1920, screen_height=1080)
+
+        # Mock mss to return consistent monitor info
+        mss_patcher = patch("utils.action_executor.mss.mss")
+        self.addCleanup(mss_patcher.stop)
+        mock_mss = mss_patcher.start()
+        mock_mss_instance = mock_mss.return_value
+        mock_mss_instance.__enter__ = lambda self: mock_mss_instance
+        mock_mss_instance.__exit__ = lambda self, *args: None
+        mock_mss_instance.monitors = [
+            {"left": 0, "top": 0, "width": 1920, "height": 1080},  # monitor 0 (all)
+            {"left": 0, "top": 0, "width": 1920, "height": 1080},  # monitor 1 (primary)
+        ]
+
+        self.executor = ActionExecutor(screen_width=1920, screen_height=1080, monitor_number=1)
 
     @patch("utils.action_executor.pyautogui.click")
     def test_click_uses_normalized_coordinates(self, click):
-        result = self.executor._execute_computer_action({
-            "action": "left_click",
-            "coordinate": [500, 500],
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "left_click",
+                "coordinate": [500, 500],
+            }
+        )
 
         self.assertTrue(result)
         click.assert_called_once_with(x=960, y=540, button="left", clicks=1)
 
     @patch("utils.action_executor.pyautogui.click")
     def test_triple_click_is_supported(self, click):
-        result = self.executor._execute_computer_action({
-            "action": "triple_click",
-            "coordinate": [250, 750],
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "triple_click",
+                "coordinate": [250, 750],
+            }
+        )
 
         self.assertTrue(result)
         click.assert_called_once_with(x=480, y=810, button="left", clicks=3)
 
     @patch("utils.action_executor.pyautogui.doubleClick")
     def test_double_click_uses_explicit_interval(self, double_click):
-        result = self.executor._execute_computer_action({
-            "action": "double_click",
-            "coordinate": [250, 750],
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "double_click",
+                "coordinate": [250, 750],
+            }
+        )
 
         self.assertTrue(result)
         double_click.assert_called_once_with(
@@ -160,10 +197,12 @@ class ActionExecutorContractTests(unittest.TestCase):
 
     @patch("utils.action_executor.pyautogui.hotkey")
     def test_key_sequence_is_executed_as_hotkey(self, hotkey):
-        result = self.executor._execute_computer_action({
-            "action": "key",
-            "keys": ["CTRL", "L"],
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "key",
+                "keys": ["CTRL", "L"],
+            }
+        )
 
         self.assertTrue(result)
         hotkey.assert_called_once_with("ctrl", "l")
@@ -171,24 +210,34 @@ class ActionExecutorContractTests(unittest.TestCase):
     @patch("utils.action_executor.pyautogui.scroll")
     @patch("utils.action_executor.pyautogui.hscroll")
     def test_scroll_actions_use_pixels_argument(self, hscroll, scroll):
-        self.assertTrue(self.executor._execute_computer_action({
-            "action": "scroll",
-            "pixels": -4,
-        }))
-        self.assertTrue(self.executor._execute_computer_action({
-            "action": "hscroll",
-            "pixels": 3,
-        }))
+        self.assertTrue(
+            self.executor._execute_computer_action(
+                {
+                    "action": "scroll",
+                    "pixels": -4,
+                }
+            )
+        )
+        self.assertTrue(
+            self.executor._execute_computer_action(
+                {
+                    "action": "hscroll",
+                    "pixels": 3,
+                }
+            )
+        )
 
         scroll.assert_called_once_with(-4)
         hscroll.assert_called_once_with(3)
 
     @patch("utils.action_executor.time.sleep")
     def test_wait_uses_time_argument(self, sleep):
-        result = self.executor._execute_computer_action({
-            "action": "wait",
-            "time": 2,
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "wait",
+                "time": 2,
+            }
+        )
 
         self.assertTrue(result)
         sleep.assert_called_once_with(2)
@@ -202,10 +251,12 @@ class ActionExecutorContractTests(unittest.TestCase):
 
     @patch("utils.action_executor.pyautogui.dragTo")
     def test_left_click_drag_without_start_coordinate_is_rejected(self, drag_to):
-        result = self.executor._execute_computer_action({
-            "action": "left_click_drag",
-            "coordinate": [750, 250],
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "left_click_drag",
+                "coordinate": [750, 250],
+            }
+        )
 
         self.assertFalse(result)
         drag_to.assert_not_called()
@@ -213,11 +264,13 @@ class ActionExecutorContractTests(unittest.TestCase):
     @patch("utils.action_executor.pyautogui.moveTo")
     @patch("utils.action_executor.pyautogui.dragTo")
     def test_left_click_drag_can_use_explicit_start_coordinate(self, drag_to, move_to):
-        result = self.executor._execute_computer_action({
-            "action": "left_click_drag",
-            "start_coordinate": [250, 900],
-            "coordinate": [750, 900],
-        })
+        result = self.executor._execute_computer_action(
+            {
+                "action": "left_click_drag",
+                "start_coordinate": [250, 900],
+                "coordinate": [750, 900],
+            }
+        )
 
         self.assertTrue(result)
         move_to.assert_called_once_with(480, 972, duration=0.5)
