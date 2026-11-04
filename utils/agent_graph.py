@@ -336,6 +336,7 @@ def act_node(state: AgentState) -> AgentState:
     approval_required_action = None
     last_mouse_verification = None
     last_action_overlay = None
+    overlay_path = None
     action_result = None
 
     if not tool_call:
@@ -358,13 +359,15 @@ def act_node(state: AgentState) -> AgentState:
         if action_name != computer_use.name:
             action_result = {"success": False, "reason": f"Unexpected tool call: {action_name}"}
         else:
+            # Ensure intent is always defined with default
+            intent = arguments.get("intent", "") if isinstance(arguments, dict) else ""
             try:
                 arguments = computer_use.validate_arguments(arguments)
             except ActionValidationError as e:
                 action_result = {"success": False, "reason": f"Invalid arguments: {e}"}
             else:
                 action_type = arguments.get("action")
-                intent = arguments.get("intent")
+                intent = arguments.get("intent", "")  # Default to empty string
 
                 # Check policy
                 if allowed_actions is not None and action_type not in allowed_actions:
@@ -449,100 +452,129 @@ def act_node(state: AgentState) -> AgentState:
                         task_completed = True
                         task_status = "dry_run"
                         dry_run_action = arguments
-                    # Repetition check
-                    elif max_repeated_actions > 0 and action_type not in {
-                        "wait",
-                        "checkpoint",
-                        "answer",
-                        "terminate",
-                    }:
-                        previous_matches = 0
-                        for entry in reversed(action_history):
-                            if entry["arguments"] != arguments:
-                                break
-                            if entry["arguments"].get("action") in {
-                                "wait",
-                                "checkpoint",
-                                "answer",
-                                "terminate",
-                            }:
-                                break
-                            previous_matches += 1
-                        if previous_matches >= max_repeated_actions:
-                            action_result = {
-                                "success": False,
-                                "reason": f"Action repeated > {max_repeated_actions} times",
-                            }
-                            task_completed = True
-                            task_status = "aborted"
-                            abort_reason = f"action repeated more than {max_repeated_actions} times: {action_type}"
                     else:
-                        # Execute action (after checks pass)
-                        # Mouse target verification
-                        if verify_mouse_targets and action_type in computer_use.MOUSE_ACTIONS:
-                            # Simplified: just log and proceed for now
-                            # Full verification would need another LLM call with overlay
-                            # Don't set action_result here - let execution proceed below
-                            pass  # Verification passed, proceed to execution
-
-                        # Mouse action budget
-                        if (
-                            max_executed_mouse_actions is not None
-                            and action_type in computer_use.MOUSE_ACTIONS
-                        ):
-                            if executed_mouse_actions >= max_executed_mouse_actions:
-                                # Use LangGraph interrupt for human-in-the-loop approval
-                                interrupt_payload = {
-                                    "action": "approval_required",
-                                    "message": f"Mouse action budget exceeded ({max_executed_mouse_actions}). Human approval required for: {action_type}",
-                                    "proposed_action": arguments,
-                                    "action_type": action_type,
-                                    "intent": intent,
-                                    "executed_mouse_actions": executed_mouse_actions,
-                                    "max_executed_mouse_actions": max_executed_mouse_actions,
+                        # Repetition check
+                        if max_repeated_actions > 0 and action_type not in {
+                            "wait",
+                            "checkpoint",
+                            "answer",
+                            "terminate",
+                        }:
+                            # Helper to extract action-relevant fields for comparison (ignore intent)
+                            def _action_key(args):
+                                relevant = {
+                                    k: v
+                                    for k, v in args.items()
+                                    if k
+                                    in {
+                                        "action",
+                                        "coordinate",
+                                        "start_coordinate",
+                                        "text",
+                                        "pixels",
+                                        "time",
+                                        "keys",
+                                        "status",
+                                    }
                                 }
-                                # Interrupt pauses graph execution and waits for human input
-                                interrupt(interrupt_payload)
-                                # Execution resumes here after human provides input
-                                resume_value = (
-                                    interrupt_payload  # interrupt() returns the resume value
-                                )
-                                # Check if human approved
-                                if isinstance(resume_value, dict) and resume_value.get("approved"):
-                                    # Human approved - proceed with execution
+                                return tuple(sorted(relevant.items()))
+
+                            current_key = _action_key(arguments)
+                            previous_matches = 0
+                            for entry in reversed(action_history):
+                                if _action_key(entry["arguments"]) != current_key:
+                                    break
+                                if entry["arguments"].get("action") in {
+                                    "wait",
+                                    "checkpoint",
+                                    "answer",
+                                    "terminate",
+                                }:
+                                    break
+                                previous_matches += 1
+                            if previous_matches >= max_repeated_actions:
+                                action_result = {
+                                    "success": False,
+                                    "reason": f"Action repeated > {max_repeated_actions} times",
+                                }
+                                task_completed = True
+                                task_status = "aborted"
+                                abort_reason = f"action repeated more than {max_repeated_actions} times: {action_type}"
+                            else:
+                                # Not repeated - proceed to execute action
+                                pass
+                        else:
+                            # No repetition limit - proceed to execute action
+                            pass
+
+                        # Execute action (after checks pass)
+                        if action_result is None:
+                            # Mouse target verification
+                            if verify_mouse_targets and action_type in computer_use.MOUSE_ACTIONS:
+                                # Simplified: just log and proceed for now
+                                # Full verification would need another LLM call with overlay
+                                pass  # Verification passed, proceed to execution
+
+                            # Mouse action budget
+                            if (
+                                max_executed_mouse_actions is not None
+                                and action_type in computer_use.MOUSE_ACTIONS
+                            ):
+                                if executed_mouse_actions >= max_executed_mouse_actions:
+                                    # Use LangGraph interrupt for human-in-the-loop approval
+                                    interrupt_payload = {
+                                        "action": "approval_required",
+                                        "message": f"Mouse action budget exceeded ({max_executed_mouse_actions}). Human approval required for: {action_type}",
+                                        "proposed_action": arguments,
+                                        "action_type": action_type,
+                                        "intent": intent,
+                                        "executed_mouse_actions": executed_mouse_actions,
+                                        "max_executed_mouse_actions": max_executed_mouse_actions,
+                                    }
+                                    # Interrupt pauses graph execution and waits for human input
+                                    interrupt(interrupt_payload)
+                                    # Execution resumes here after human provides input
+                                    resume_value = (
+                                        interrupt_payload  # interrupt() returns the resume value
+                                    )
+                                    # Check if human approved
+                                    if isinstance(resume_value, dict) and resume_value.get(
+                                        "approved"
+                                    ):
+                                        # Human approved - proceed with execution
+                                        executed_mouse_actions += 1
+                                        success = action_executor.execute_computer_use_action(
+                                            {"name": action_name, "arguments": arguments}
+                                        )
+                                        action_result = {
+                                            "success": success,
+                                            "executed": True,
+                                            "approved": True,
+                                        }
+                                    else:
+                                        # Human rejected or didn't approve
+                                        action_result = {
+                                            "success": False,
+                                            "reason": "Human rejected action",
+                                        }
+                                        task_completed = True
+                                        task_status = "aborted"
+                                        abort_reason = "Human rejected mouse action"
+                                else:
+                                    # Budget not exceeded, execute normally
                                     executed_mouse_actions += 1
                                     success = action_executor.execute_computer_use_action(
                                         {"name": action_name, "arguments": arguments}
                                     )
-                                    action_result = {
-                                        "success": success,
-                                        "executed": True,
-                                        "approved": True,
-                                    }
-                                else:
-                                    # Human rejected or didn't approve
-                                    action_result = {
-                                        "success": False,
-                                        "reason": "Human rejected action",
-                                    }
-                                    task_completed = True
-                                    task_status = "aborted"
-                                    abort_reason = "Human rejected mouse action"
+                                    action_result = {"success": success, "executed": True}
                             else:
-                                # Budget not exceeded, execute normally
-                                executed_mouse_actions += 1
+                                # No budget limit, execute normally
+                                if action_type in computer_use.MOUSE_ACTIONS:
+                                    executed_mouse_actions += 1
                                 success = action_executor.execute_computer_use_action(
                                     {"name": action_name, "arguments": arguments}
                                 )
                                 action_result = {"success": success, "executed": True}
-                        else:
-                            # No budget limit, execute normally
-                            if action_type in computer_use.MOUSE_ACTIONS:
-                                executed_mouse_actions += 1
-                            success = action_executor.execute_computer_use_action(
-                                {"name": action_name, "arguments": arguments}
-                            )
-                            action_result = {"success": success, "executed": True}
 
                         # Check consecutive failures
                         if not action_result.get("success", False) and max_consecutive_failures > 0:
