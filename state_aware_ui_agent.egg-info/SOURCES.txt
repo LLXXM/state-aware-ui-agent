@@ -20,6 +20,7 @@ tests/test_ollama_client.py
 utils/__init__.py
 utils/action_executor.py
 utils/agent_function_call.py
+utils/agent_graph.py
 utils/config_loader.py
 utils/html_report.py
 utils/ollama_client.py

@@ -5,9 +5,11 @@ Defines the See → Think → Act loop as a state machine with conditional edges
 
 from typing import TypedDict, Optional, List, Dict, Any, Literal
 from datetime import datetime
+from pathlib import Path
 from PIL import Image
 
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite import SqliteSaver
 from utils.llm_providers import LLMProvider
 from utils.action_executor import ActionExecutor
 from utils.agent_function_call import ComputerUse, ActionValidationError
@@ -604,8 +606,14 @@ def should_continue(state: AgentState) -> Literal["continue", "end", "timeout"]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def build_agent_graph() -> StateGraph:
-    """Build and compile the agent state graph."""
+def build_agent_graph(
+    checkpoint_dir: Optional[str] = None,
+) -> StateGraph:
+    """Build and compile the agent state graph with optional checkpointing.
+
+    Args:
+        checkpoint_dir: Directory for SQLite checkpoint database. If None, no checkpointing.
+    """
     graph = StateGraph(AgentState)
 
     graph.add_node("planner", planner_node)
@@ -626,6 +634,13 @@ def build_agent_graph() -> StateGraph:
             "timeout": END,
         },
     )
+
+    # Add checkpointing if directory provided
+    if checkpoint_dir:
+        checkpoint_path = Path(checkpoint_dir) / "agent_checkpoints.db"
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpointer = SqliteSaver.from_conn_string(f"sqlite:///{checkpoint_path}")
+        return graph.compile(checkpointer=checkpointer)
 
     return graph.compile()
 

@@ -53,6 +53,7 @@ class SeeThinkActAgent:
         model_options: Optional[Dict[str, Any]] = None,
         report_dir: Optional[str] = config.REPORT_DIR,
         additional_system_prompt: Optional[str] = None,
+        checkpoint_dir: Optional[str] = None,  # Phase 3.2: Checkpointing
     ):
         """
         Initialize the See-Think-Act Agent
@@ -126,6 +127,7 @@ class SeeThinkActAgent:
         self.report_dir = report_dir
         self.report = None
         self.screenshot_dir = Path(screenshot_dir)
+        self.checkpoint_dir = checkpoint_dir  # Phase 3.2: Checkpointing
 
         # Create screenshot directory
         if self.save_screenshots:
@@ -140,8 +142,8 @@ class SeeThinkActAgent:
             if unknown_actions:
                 raise ValueError(f"Unsupported allowed actions: {sorted(unknown_actions)}")
 
-        # Build LangGraph
-        self.graph = build_agent_graph()
+        # Build LangGraph with checkpointing
+        self.graph = build_agent_graph(checkpoint_dir=self.checkpoint_dir)
 
         self.logger.info(f"Agent initialized with provider: {provider_type}, model: {model}")
         self.logger.info(f"Screen size: {screen_width}x{screen_height}")
@@ -950,7 +952,15 @@ class SeeThinkActAgent:
 
         # Run the graph
         try:
-            final_state = self.graph.invoke(initial_state)
+            # Generate thread_id for checkpointing (unique per task run)
+            thread_id = (
+                f"task-{abs(hash(task)) % 1000000:06d}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            )
+            graph_config = (
+                {"configurable": {"thread_id": thread_id}} if self.checkpoint_dir else None
+            )
+
+            final_state = self.graph.invoke(initial_state, config=graph_config)
             result = finalize_state(final_state)
 
             self.logger.info(f"\n{'=' * 80}")
