@@ -677,6 +677,7 @@ def act_node(state: AgentState) -> AgentState:
         "executed_mouse_actions": executed_mouse_actions,
         "last_mouse_verification": last_mouse_verification,
         "last_action_overlay": last_action_overlay,
+        "iteration": iteration + 1,
     }
 
 

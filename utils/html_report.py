@@ -129,23 +129,22 @@ class HtmlRunReport:
             ("Report file", self.report_path.name),
         ]
         if usage["prompt_eval_count"] or usage["eval_count"]:
-            items.extend([
-                ("Input tokens", f"{int(usage['prompt_eval_count'])} tokens"),
-                ("Output tokens", f"{int(usage['eval_count'])} tokens"),
-                ("Model time", self._format_nanoseconds(usage["total_duration"])),
-            ])
+            items.extend(
+                [
+                    ("Input tokens", f"{int(usage['prompt_eval_count'])} tokens"),
+                    ("Output tokens", f"{int(usage['eval_count'])} tokens"),
+                    ("Model time", self._format_nanoseconds(usage["total_duration"])),
+                ]
+            )
         return items
 
     def _render_summary(self) -> str:
-        items = "\n".join(
-            f"""
+        items = "\n".join(f"""
             <div class="summary-item">
               <div class="summary-label">{self._text(label)}</div>
               <div class="summary-value">{self._text(value)}</div>
             </div>
-            """
-            for label, value in self._summary_items()
-        )
+            """ for label, value in self._summary_items())
         return f"""<section class="summary-grid" aria-label="Run summary">{items}</section>"""
 
     def _render_image(self, label: str, path_value: Any) -> str:
@@ -163,10 +162,7 @@ class HtmlRunReport:
         response = record.get("response") or {}
         message = response.get("message", {}) if isinstance(response, dict) else {}
         reasoning = (
-            message.get("thinking")
-            or message.get("reasoning")
-            or message.get("content")
-            or ""
+            message.get("thinking") or message.get("reasoning") or message.get("content") or ""
         )
         action_record = record.get("action_record")
         tool_call = record.get("tool_call")
