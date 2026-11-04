@@ -27,7 +27,7 @@ class SeeThinkActAgent:
     """
     Autonomous AI Agent that can See, Think, and Act
     - See: Captures screenshots of the desktop
-    - Think: Analyzes with Qwen3.5 model via Ollama
+    - Think: Analyzes with LLM model
     - Act: Executes actions based on model's decisions
     """
 
@@ -53,7 +53,8 @@ class SeeThinkActAgent:
         model_options: Optional[Dict[str, Any]] = None,
         report_dir: Optional[str] = config.REPORT_DIR,
         additional_system_prompt: Optional[str] = None,
-        checkpoint_dir: Optional[str] = None,  # Phase 3.2: Checkpointing
+        checkpoint_dir: Optional[str] = None,
+        monitor_number: int = 1,  # Monitor to capture (1 = primary, 2 = secondary, etc.)
     ):
         """
         Initialize the See-Think-Act Agent
@@ -101,8 +102,8 @@ class SeeThinkActAgent:
             options=model_options,
         )
 
-        # Get actual screen size
-        screen_width, screen_height = self.screenshot_capture.get_screen_size()
+        # Get actual screen size for the specified monitor
+        screen_width, screen_height = self.screenshot_capture.get_screen_size(monitor_number)
         self.action_executor = ActionExecutor(
             screen_width=screen_width, screen_height=screen_height
         )
@@ -128,6 +129,7 @@ class SeeThinkActAgent:
         self.report = None
         self.screenshot_dir = Path(screenshot_dir)
         self.checkpoint_dir = checkpoint_dir  # Phase 3.2: Checkpointing
+        self.monitor_number = monitor_number
 
         # Create screenshot directory
         if self.save_screenshots:
@@ -938,6 +940,7 @@ class SeeThinkActAgent:
             "screenshot_dir": str(self.screenshot_dir),
             "system_prompt": config.SYSTEM_PROMPT,
             "additional_system_prompt": self.additional_system_prompt,
+            "monitor_number": self.monitor_number,
         }
 
         # Create initial state

@@ -68,6 +68,7 @@ def _build_agent(case: UiTestCase, report_dir: str) -> SeeThinkActAgent:
         model_options=case.model_options,
         report_dir=report_dir,
         additional_system_prompt=case.app_context,
+        monitor_number=case.monitor_number,
     )
 
 

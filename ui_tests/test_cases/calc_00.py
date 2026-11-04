@@ -59,11 +59,12 @@ CASE = UiTestCase(
     pre_run_setup=make_setup_fn(
         launch_command="calc.exe",
         wait_for_window=r"(Calculator|Rechner)",
-        minimize_all_first=True,
+        minimize_all_first=False,
     ),
     post_run_cleanup=make_cleanup_fn(
         close_window_title=r"(Calculator|Rechner)",
         restore_windows=True,
     ),
     report_dir_name="Reports",
+    monitor_number=2,
 )

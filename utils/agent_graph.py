@@ -85,8 +85,9 @@ class AgentState(TypedDict):
 def see_node(state: AgentState) -> AgentState:
     """Capture screenshot."""
     config = state["config"]
-    screenshot_capture = ScreenshotCapture()
-    screenshot = screenshot_capture.capture_screen()
+    screenshot_capture = config["screenshot_capture"]
+    monitor_number = config.get("monitor_number", 1)
+    screenshot = screenshot_capture.capture_screen(monitor_number)
 
     screenshot_path = None
     if config.get("save_screenshots", True):
@@ -118,7 +119,8 @@ def planner_node(state: AgentState) -> AgentState:
     # Capture screenshot if not already present
     screenshot = state.get("screenshot")
     if screenshot is None:
-        screenshot = screenshot_capture.capture_screen()
+        monitor_number = config.get("monitor_number", 1)
+        screenshot = screenshot_capture.capture_screen(monitor_number)
 
     # Build system prompt
     system_prompt = config.get("system_prompt", "")

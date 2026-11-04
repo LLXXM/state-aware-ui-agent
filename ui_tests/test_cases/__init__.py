@@ -31,6 +31,8 @@ class UiTestCase:
     # LLM Provider settings
     provider_type: str = config.LLM_PROVIDER
     model: Optional[str] = None
+    # Monitor settings
+    monitor_number: int = 1
     pre_run_setup: Optional[Callable[[], dict]] = None
     post_run_cleanup: Optional[Callable[[], dict]] = None
     report_dir_name: str = config.TEST_CASE_REPORTS_DIR_NAME
