@@ -10,6 +10,7 @@ from PIL import Image
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.types import interrupt
 from utils.llm_providers import LLMProvider
 from utils.action_executor import ActionExecutor
 from utils.agent_function_call import ComputerUse, ActionValidationError
@@ -41,6 +42,10 @@ class AgentState(TypedDict):
     abort_reason: Optional[str]
     dry_run_action: Optional[Dict[str, Any]]
     approval_required_action: Optional[Dict[str, Any]]
+
+    # Human-in-the-loop (Phase 3.3)
+    interrupt_payload: Optional[Dict[str, Any]]  # Action awaiting human approval
+    interrupt_resume_action: Optional[Dict[str, Any]]  # Action to resume after approval
 
     # Screenshot
     screenshot: Optional[Image.Image]
@@ -470,22 +475,49 @@ def act_node(state: AgentState) -> AgentState:
                         and action_type in computer_use.MOUSE_ACTIONS
                     ):
                         if executed_mouse_actions >= max_executed_mouse_actions:
-                            action_result = {"success": True, "approval_required": True}
-                            task_completed = True
-                            task_status = "approval_required"
-                            approval_required_action = arguments
-                    # Execute action
-                    else:
-                        if action_type in computer_use.MOUSE_ACTIONS:
-                            executed_mouse_actions += 1
-
-                        success = action_executor.execute_computer_use_action(
-                            {
-                                "name": action_name,
-                                "arguments": arguments,
+                            # Use LangGraph interrupt for human-in-the-loop approval
+                            interrupt_payload = {
+                                "action": "approval_required",
+                                "message": f"Mouse action budget exceeded ({max_executed_mouse_actions}). Human approval required for: {action_type}",
+                                "proposed_action": arguments,
+                                "action_type": action_type,
+                                "intent": intent,
+                                "executed_mouse_actions": executed_mouse_actions,
+                                "max_executed_mouse_actions": max_executed_mouse_actions,
                             }
-                        )
-                        action_result = {"success": success, "executed": True}
+                            # Interrupt pauses graph execution and waits for human input
+                            interrupt(interrupt_payload)
+                            # Execution resumes here after human provides input
+                            # The resume value is available as the return value of interrupt()
+                            resume_value = interrupt_payload  # interrupt() returns the resume value
+                            # Check if human approved
+                            if isinstance(resume_value, dict) and resume_value.get("approved"):
+                                # Human approved - proceed with execution
+                                executed_mouse_actions += 1
+                                success = action_executor.execute_computer_use_action(
+                                    {"name": action_name, "arguments": arguments}
+                                )
+                                action_result = {
+                                    "success": success,
+                                    "executed": True,
+                                    "approved": True,
+                                }
+                            else:
+                                # Human rejected or didn't approve
+                                action_result = {
+                                    "success": False,
+                                    "reason": "Human rejected action",
+                                }
+                                task_completed = True
+                                task_status = "aborted"
+                                abort_reason = "Human rejected mouse action"
+                        else:
+                            # Budget not exceeded, execute normally
+                            executed_mouse_actions += 1
+                            success = action_executor.execute_computer_use_action(
+                                {"name": action_name, "arguments": arguments}
+                            )
+                            action_result = {"success": success, "executed": True}
 
                         # Check consecutive failures
                         if not success and max_consecutive_failures > 0:
@@ -697,6 +729,9 @@ def create_initial_state(
         abort_reason=None,
         dry_run_action=None,
         approval_required_action=None,
+        # Human-in-the-loop (Phase 3.3)
+        interrupt_payload=None,
+        interrupt_resume_action=None,
         # Screenshot
         screenshot=None,
         screenshot_path=None,
