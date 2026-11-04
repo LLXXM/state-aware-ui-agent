@@ -87,9 +87,10 @@ The action to perform. Available actions:
                 "description": (
                     "A normalized absolute [x, y] position on a 0-1000 screen scale, "
                     "required for mouse actions. For left_click_drag this is the absolute "
-                    "drag target/end position, not a relative offset."
+                    "drag target/end position, not a relative offset. "
+                    "Must be integers (e.g., [500, 500] not [0.5, 0.5])."
                 ),
-                "items": {"type": "number", "minimum": 0, "maximum": 1000},
+                "items": {"type": "integer", "minimum": 0, "maximum": 1000},
                 "maxItems": 2,
                 "minItems": 2,
                 "type": "array",
@@ -98,9 +99,10 @@ The action to perform. Available actions:
                 "description": (
                     "Required normalized absolute [x, y] drag source for "
                     "`action=left_click_drag`. The executor first moves to this "
-                    "source point, then drags to `coordinate`."
+                    "source point, then drags to `coordinate`. "
+                    "Must be integers (e.g., [500, 500] not [0.5, 0.5])."
                 ),
-                "items": {"type": "number", "minimum": 0, "maximum": 1000},
+                "items": {"type": "integer", "minimum": 0, "maximum": 1000},
                 "maxItems": 2,
                 "minItems": 2,
                 "type": "array",
@@ -169,9 +171,7 @@ Use a mouse and keyboard to interact with a computer.
             self._validate_coordinate(arguments.get("coordinate"))
             if action == "left_click_drag":
                 if "start_coordinate" not in arguments:
-                    raise ActionValidationError(
-                        "left_click_drag requires start_coordinate [x, y]"
-                    )
+                    raise ActionValidationError("left_click_drag requires start_coordinate [x, y]")
                 self._validate_coordinate(arguments.get("start_coordinate"))
         elif action == "key":
             keys = arguments.get("keys")
@@ -191,9 +191,7 @@ Use a mouse and keyboard to interact with a computer.
                 raise ActionValidationError("Wait time must be between 0 and 30 seconds")
         elif action == "terminate":
             if arguments.get("status") not in {"success", "failure"}:
-                raise ActionValidationError(
-                    "Terminate action requires success or failure status"
-                )
+                raise ActionValidationError("Terminate action requires success or failure status")
 
         return arguments
 
@@ -206,5 +204,16 @@ Use a mouse and keyboard to interact with a computer.
         if not isinstance(coordinate, list) or len(coordinate) != 2:
             raise ActionValidationError("Mouse action requires coordinate [x, y]")
 
-        if not all(cls._is_number(value) and 0 <= value <= 1000 for value in coordinate):
-            raise ActionValidationError("Coordinate values must be between 0 and 1000")
+        # Convert float coordinates to integers (handle model sending 0-1 floats)
+        converted = []
+        for value in coordinate:
+            if isinstance(value, float) and 0 <= value <= 1:
+                # Model sent 0-1 float, convert to 0-1000 integer
+                converted.append(int(round(value * 1000)))
+            elif cls._is_number(value) and 0 <= value <= 1000:
+                converted.append(int(value))
+            else:
+                raise ActionValidationError("Coordinate values must be between 0 and 1000")
+
+        # Update the coordinate in place
+        coordinate[:] = converted
